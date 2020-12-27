@@ -42,6 +42,8 @@ func (s *webhookService) Parse(req *http.Request, fn scm.SecretFunc) (scm.Webhoo
 		hook, err = s.parsePullRequestHook(data)
 	case "deployment":
 		hook, err = s.parseDeploymentHook(data)
+	case "ping":
+		hook, err = s.parsePingHook(data)
 	// case "pull_request_review_comment":
 	// case "issues":
 	case "issue_comment":
@@ -194,52 +196,6 @@ func (s *webhookService) parsePipelineHook(data []byte) (scm.Webhook, error) {
 	return dst, nil
 }
 
-func convertPipelineHook(src *pipelineHook) *scm.PipelineHook {
-	pr := scm.PullRequest{}
-	if len(src.WorkflowRun.PullRequests) > 0 {
-		pr = scm.PullRequest{
-			Number:  src.WorkflowRun.PullRequests[0].Number,
-			Sha:     src.WorkflowRun.PullRequests[0].Head.SHA,
-			Ref:     src.WorkflowRun.PullRequests[0].Head.Ref,
-			Source:  src.WorkflowRun.PullRequests[0].Head.Ref,
-			Target:  src.WorkflowRun.PullRequests[0].Base.Ref,
-			Link:    src.WorkflowRun.PullRequests[0].URL,
-			Created: src.WorkflowRun.CreatedAt,
-		}
-	}
-
-	var execution_status string
-	if src.WorkflowRun.Status == "completed" {
-		execution_status = src.WorkflowRun.Conclusion.String
-	} else {
-		execution_status = src.WorkflowRun.Status
-	}
-
-	return &scm.PipelineHook{
-		Repo: *convertRepository(&src.Repository),
-		Commit: scm.Commit{
-			Sha:     src.WorkflowRun.HeadCommit.ID,
-			Message: src.WorkflowRun.HeadCommit.Message,
-			Author: scm.Signature{
-				Name:  src.WorkflowRun.HeadCommit.Author.Name,
-				Email: src.WorkflowRun.HeadCommit.Author.Email,
-			},
-			Committer: scm.Signature{
-				Name:  src.WorkflowRun.HeadCommit.Committer.Name,
-				Email: src.WorkflowRun.HeadCommit.Committer.Email,
-			},
-		},
-		Execution: scm.Execution{
-			Number:  int(src.WorkflowRun.RunNumber),
-			Status:  scm.ConvertExecutionStatus(execution_status),
-			Created: src.WorkflowRun.CreatedAt,
-			URL:     src.WorkflowRun.URL,
-		},
-		Sender:      *convertUser(&src.Sender),
-		PullRequest: pr,
-	}
-}
-
 func (s *webhookService) parseReleaseHook(data []byte) (scm.Webhook, error) {
 	src := new(releaseHook)
 	err := json.Unmarshal(data, src)
@@ -265,6 +221,16 @@ func (s *webhookService) parseReleaseHook(data []byte) (scm.Webhook, error) {
 	default:
 		dst.Action = scm.ActionUnknown
 	}
+	return dst, nil
+}
+
+func (s *webhookService) parsePingHook(data []byte) (scm.Webhook, error) {
+	src := new(pingHook)
+	err := json.Unmarshal(data, src)
+	if err != nil {
+		return nil, err
+	}
+	dst := convertPingHook(src)
 	return dst, nil
 }
 
@@ -464,12 +430,6 @@ type (
 		Repository repository `json:"repository"`
 	}
 
-	gitRef struct {
-		Ref  string     `json:"ref"`
-		SHA  string     `json:"sha"`
-		Repo repository `json:"repo"`
-	}
-
 	owner struct {
 		Login     string `json:"login"`
 		ID        int64  `json:"id"`
@@ -483,6 +443,17 @@ type (
 	author struct {
 		Name  string `json:"name"`
 		Email string `json:"email"`
+	}
+
+	pingHook struct {
+		Repository repository `json:"repository"`
+		Sender     user       `json:"sender"`
+	}
+
+	gitRef struct {
+		Ref  string     `json:"ref"`
+		SHA  string     `json:"sha"`
+		Repo repository `json:"repo"`
 	}
 )
 
@@ -656,6 +627,21 @@ func convertDeploymentHook(src *deploymentHook) *scm.DeployHook {
 	}
 	return dst
 }
+func convertPingHook(src *pingHook) *scm.PingHook {
+	return &scm.PingHook{
+		Repo: scm.Repository{
+			ID:        fmt.Sprint(src.Repository.ID),
+			Namespace: src.Repository.Owner.Login,
+			Name:      src.Repository.Name,
+			Branch:    src.Repository.DefaultBranch,
+			Private:   src.Repository.Private,
+			Clone:     src.Repository.CloneURL,
+			CloneSSH:  src.Repository.SSHURL,
+			Link:      src.Repository.HTMLURL,
+		},
+		Sender: *convertUser(&src.Sender),
+	}
+}
 
 func convertIssueCommentHook(src *issueCommentHook) *scm.IssueCommentHook {
 	dst := &scm.IssueCommentHook{
@@ -711,6 +697,52 @@ func convertReleaseHook(src *releaseHook) *scm.ReleaseHook {
 		Sender: *convertUser(&src.Sender),
 	}
 	return dst
+}
+
+func convertPipelineHook(src *pipelineHook) *scm.PipelineHook {
+	pr := scm.PullRequest{}
+	if len(src.WorkflowRun.PullRequests) > 0 {
+		pr = scm.PullRequest{
+			Number:  src.WorkflowRun.PullRequests[0].Number,
+			Sha:     src.WorkflowRun.PullRequests[0].Head.SHA,
+			Ref:     src.WorkflowRun.PullRequests[0].Head.Ref,
+			Source:  src.WorkflowRun.PullRequests[0].Head.Ref,
+			Target:  src.WorkflowRun.PullRequests[0].Base.Ref,
+			Link:    src.WorkflowRun.PullRequests[0].URL,
+			Created: src.WorkflowRun.CreatedAt,
+		}
+	}
+
+	var execution_status string
+	if src.WorkflowRun.Status == "completed" {
+		execution_status = src.WorkflowRun.Conclusion.String
+	} else {
+		execution_status = src.WorkflowRun.Status
+	}
+
+	return &scm.PipelineHook{
+		Repo: *convertRepository(&src.Repository),
+		Commit: scm.Commit{
+			Sha:     src.WorkflowRun.HeadCommit.ID,
+			Message: src.WorkflowRun.HeadCommit.Message,
+			Author: scm.Signature{
+				Name:  src.WorkflowRun.HeadCommit.Author.Name,
+				Email: src.WorkflowRun.HeadCommit.Author.Email,
+			},
+			Committer: scm.Signature{
+				Name:  src.WorkflowRun.HeadCommit.Committer.Name,
+				Email: src.WorkflowRun.HeadCommit.Committer.Email,
+			},
+		},
+		Execution: scm.Execution{
+			Number:  int(src.WorkflowRun.RunNumber),
+			Status:  scm.ConvertExecutionStatus(execution_status),
+			Created: src.WorkflowRun.CreatedAt,
+			URL:     src.WorkflowRun.URL,
+		},
+		Sender:      *convertUser(&src.Sender),
+		PullRequest: pr,
+	}
 }
 
 // regexp help determine if the named git object is a tag.
