@@ -133,7 +133,6 @@ type pr struct {
 		StartSha string `json:"start_sha"`
 	} `json:"diff_refs"`
 }
-
 type changes struct {
 	Changes []*change
 }
@@ -181,9 +180,8 @@ func convertPullRequest(from *pr) *scm.PullRequest {
 		Created: from.Created,
 		Updated: from.Updated,
 		Labels:  labels,
-		Base: scm.Reference{
-			Sha: from.DiffRefs.BaseSha,
-		},
+		Base:    scm.Reference{Name: from.TargetBranch, Sha: from.DiffRefs.BaseSha},
+		Head:    scm.Reference{Name: from.SourceBranch, Sha: from.DiffRefs.HeadSha},
 	}
 }
 
