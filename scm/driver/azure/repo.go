@@ -69,6 +69,10 @@ func (s *RepositoryService) ListNamespace(ctx context.Context, _ string, opts sc
 	return s.List(ctx, opts)
 }
 
+func (s *RepositoryService) List2(ctx context.Context, orgSlug string, opts scm.ListOptions) ([]*scm.Repository, *scm.Response, error) {
+	return nil, nil, scm.ErrNotSupported
+}
+
 // ListHooks returns a list or repository hooks.
 func (s *RepositoryService) ListHooks(ctx context.Context, repo string, opts scm.ListOptions) ([]*scm.Hook, *scm.Response, error) {
 	// https://docs.microsoft.com/en-us/rest/api/azure/devops/hooks/subscriptions/list?view=azure-devops-rest-6.0

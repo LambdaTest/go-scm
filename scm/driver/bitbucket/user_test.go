@@ -67,24 +67,18 @@ func TestUserLoginFind(t *testing.T) {
 }
 
 func TestUserFindEmail(t *testing.T) {
-	defer gock.Off()
-
 	gock.New("https://api.bitbucket.org").
-		Get("/2.0/user/emails").
+		Get("2.0/user/emails").
 		Reply(200).
 		Type("application/json").
-		File("testdata/userEmail.json")
+		File("testdata/email.json")
 
 	client, _ := New("https://api.bitbucket.org")
 	got, _, err := client.Users.FindEmail(context.Background())
 	if err != nil {
-		t.Error(err)
+		t.Errorf("Unexpected error")
 	}
-
-	want := "test@harness.io"
-
-	if diff := cmp.Diff(got, want); diff != "" {
+	if got != "primary@example.com" {
 		t.Errorf("Unexpected Results")
-		t.Log(diff)
 	}
 }

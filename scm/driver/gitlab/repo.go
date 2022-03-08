@@ -94,19 +94,8 @@ func (s *repositoryService) List(ctx context.Context, opts scm.ListOptions) ([]*
 	return convertRepositoryList(out), res, err
 }
 
-func (s *repositoryService) ListV2(ctx context.Context, opts scm.RepoListOptions) ([]*scm.Repository, *scm.Response, error) {
-	// We pass the repo searchTerm in the query params and gitlab filters repos based on this search term
-	path := fmt.Sprintf("api/v4/projects?%s", encodeRepoListOptions(opts))
-	out := []*repository{}
-	res, err := s.client.do(ctx, "GET", path, nil, &out)
-	return convertRepositoryList(out), res, err
-}
-
-func (s *repositoryService) ListNamespace(ctx context.Context, namespace string, opts scm.ListOptions) ([]*scm.Repository, *scm.Response, error) {
-	path := fmt.Sprintf("api/v4/groups/%s/projects?%s", namespace, encodeMemberListOptions(opts))
-	out := []*repository{}
-	res, err := s.client.do(ctx, "GET", path, nil, &out)
-	return convertRepositoryList(out), res, err
+func (s *repositoryService) List2(ctx context.Context, orgSlug string, opts scm.ListOptions) ([]*scm.Repository, *scm.Response, error) {
+	return nil, nil, scm.ErrNotSupported
 }
 
 func (s *repositoryService) ListHooks(ctx context.Context, repo string, opts scm.ListOptions) ([]*scm.Hook, *scm.Response, error) {
@@ -151,9 +140,6 @@ func (s *repositoryService) CreateHook(ctx context.Context, repo string, input *
 	if input.Events.Tag {
 		params.Set("tag_push_events", "true")
 	}
-	if input.Events.Pipeline {
-		params.Set("pipeline_events", "true")
-	}
 
 	path := fmt.Sprintf("api/v4/projects/%s/hooks?%s", encode(repo), params.Encode())
 	out := new(hook)
@@ -181,7 +167,7 @@ func (s *repositoryService) DeleteHook(ctx context.Context, repo string, id stri
 	return s.client.do(ctx, "DELETE", path, nil, nil)
 }
 
-// helper function to convert from the gitlab repository list to
+// helper function to convert from the gogs repository list to
 // the common repository structure.
 func convertRepositoryList(from []*repository) []*scm.Repository {
 	to := []*scm.Repository{}
@@ -191,7 +177,7 @@ func convertRepositoryList(from []*repository) []*scm.Repository {
 	return to
 }
 
-// helper function to convert from the gitlab repository structure
+// helper function to convert from the gogs repository structure
 // to the common repository structure.
 func convertRepository(from *repository) *scm.Repository {
 	to := &scm.Repository{
@@ -200,8 +186,8 @@ func convertRepository(from *repository) *scm.Repository {
 		Name:       from.Path,
 		Branch:     from.DefaultBranch,
 		Archived:   from.Archived,
-		Private:    scm.ConvertPrivate(from.Visibility),
-		Visibility: scm.ConvertVisibility(from.Visibility),
+		Private:    convertPrivate(from.Visibility),
+		Visibility: convertVisibility(from.Visibility),
 		Clone:      from.HTTPURL,
 		CloneSSH:   from.SSHURL,
 		Link:       from.WebURL,
@@ -317,6 +303,28 @@ func convertFromState(from scm.State) string {
 		return "canceled"
 	default:
 		return "failed"
+	}
+}
+
+func convertPrivate(from string) bool {
+	switch from {
+	case "public", "":
+		return false
+	default:
+		return true
+	}
+}
+
+func convertVisibility(from string) scm.Visibility {
+	switch from {
+	case "public":
+		return scm.VisibilityPublic
+	case "private":
+		return scm.VisibilityPrivate
+	case "internal":
+		return scm.VisibilityInternal
+	default:
+		return scm.VisibilityUndefined
 	}
 }
 

@@ -6,7 +6,6 @@ package github
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -40,10 +39,6 @@ type repository struct {
 	} `json:"permissions"`
 }
 
-type searchRepositoryList struct {
-	Repositories []*repository `json:"items"`
-}
-
 type hook struct {
 	ID     int      `json:"id,omitempty"`
 	Name   string   `json:"name"`
@@ -57,11 +52,6 @@ type hook struct {
 	} `json:"config"`
 }
 
-type repositoryList struct {
-	TotalCount   int           `json:"total_count"`
-	Repositories []*repository `json:"repositories"`
-}
-
 // RepositoryService implements the repository service for
 // the GitHub driver.
 type RepositoryService struct {
@@ -73,14 +63,7 @@ func (s *RepositoryService) Find(ctx context.Context, repo string) (*scm.Reposit
 	path := fmt.Sprintf("repos/%s", repo)
 	out := new(repository)
 	res, err := s.client.do(ctx, "GET", path, nil, out)
-	if err != nil {
-		return nil, res, err
-	}
-	convertedRepo := convertRepository(out)
-	if convertedRepo == nil {
-		return nil, res, errors.New("GitHub returned an unexpected null repository")
-	}
-	return convertedRepo, res, err
+	return convertRepository(out), res, err
 }
 
 // FindHook returns a repository hook.
@@ -96,14 +79,7 @@ func (s *RepositoryService) FindPerms(ctx context.Context, repo string) (*scm.Pe
 	path := fmt.Sprintf("repos/%s", repo)
 	out := new(repository)
 	res, err := s.client.do(ctx, "GET", path, nil, out)
-	if err != nil {
-		return nil, res, err
-	}
-	convertedRepo := convertRepository(out)
-	if convertedRepo == nil {
-		return nil, res, errors.New("GitHub returned an unexpected null repository")
-	}
-	return convertedRepo.Perm, res, err
+	return convertRepository(out).Perm, res, err
 }
 
 // List returns the user repository list.
@@ -114,28 +90,8 @@ func (s *RepositoryService) List(ctx context.Context, opts scm.ListOptions) ([]*
 	return convertRepositoryList(out), res, err
 }
 
-// ListV2 returns the user repository list based on the searchTerm passed.
-func (s *RepositoryService) ListV2(ctx context.Context, opts scm.RepoListOptions) ([]*scm.Repository, *scm.Response, error) {
-	path := fmt.Sprintf("search/repositories?%s", encodeRepoListOptions(opts))
-	out := new(searchRepositoryList)
-	res, err := s.client.do(ctx, "GET", path, nil, &out)
-	return convertRepositoryList(out.Repositories), res, err
-}
-
-// ListNamespace returns the orgs' repository list.
-func (s *RepositoryService) ListNamespace(ctx context.Context, namespace string, opts scm.ListOptions) ([]*scm.Repository, *scm.Response, error) {
-	path := fmt.Sprintf("orgs/%s/repos?%s", namespace, encodeListOptions(opts))
-	out := []*repository{}
-	res, err := s.client.do(ctx, "GET", path, nil, &out)
-	return convertRepositoryList(out), res, err
-}
-
-// List returns the github app installation repository list.
-func (s *RepositoryService) ListByInstallation(ctx context.Context, opts scm.ListOptions) ([]*scm.Repository, *scm.Response, error) {
-	path := fmt.Sprintf("installation/repositories?%s", encodeListOptions(opts))
-	out := new(repositoryList)
-	res, err := s.client.do(ctx, "GET", path, nil, out)
-	return convertRepositoryList(out.Repositories), res, err
+func (s *RepositoryService) List2(ctx context.Context, orgSlug string, opts scm.ListOptions) ([]*scm.Repository, *scm.Response, error) {
+	return nil, nil, scm.ErrNotSupported
 }
 
 // ListHooks returns a list or repository hooks.
@@ -230,24 +186,19 @@ func (s *RepositoryService) DeleteHook(ctx context.Context, repo, id string) (*s
 	return s.client.do(ctx, "DELETE", path, nil, nil)
 }
 
-// helper function to convert from the github repository list to
+// helper function to convert from the gogs repository list to
 // the common repository structure.
 func convertRepositoryList(from []*repository) []*scm.Repository {
 	to := []*scm.Repository{}
 	for _, v := range from {
-		if repo := convertRepository(v); repo != nil {
-			to = append(to, repo)
-		}
+		to = append(to, convertRepository(v))
 	}
 	return to
 }
 
-// helper function to convert from the github repository structure
+// helper function to convert from the gogs repository structure
 // to the common repository structure.
 func convertRepository(from *repository) *scm.Repository {
-	if from == nil {
-		return nil
-	}
 	return &scm.Repository{
 		ID:        strconv.Itoa(from.ID),
 		Name:      from.Name,
@@ -261,7 +212,7 @@ func convertRepository(from *repository) *scm.Repository {
 		Branch:     from.DefaultBranch,
 		Archived:   from.Archived,
 		Private:    from.Private,
-		Visibility: scm.ConvertVisibility(from.Visibility),
+		Visibility: convertVisibility(from.Visibility),
 		Clone:      from.CloneURL,
 		CloneSSH:   from.SSHURL,
 		Created:    from.CreatedAt,
@@ -312,6 +263,19 @@ func convertFromHookEvents(from scm.HookEvents) []string {
 		events = append(events, "deployment")
 	}
 	return events
+}
+
+func convertVisibility(from string) scm.Visibility {
+	switch from {
+	case "public":
+		return scm.VisibilityPublic
+	case "private":
+		return scm.VisibilityPrivate
+	case "internal":
+		return scm.VisibilityInternal
+	default:
+		return scm.VisibilityUndefined
+	}
 }
 
 type status struct {

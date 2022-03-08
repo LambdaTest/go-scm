@@ -46,16 +46,8 @@ func (s *repositoryService) List(ctx context.Context, opts scm.ListOptions) ([]*
 	return convertRepositoryList(out), res, err
 }
 
-func (s *repositoryService) ListV2(ctx context.Context, opts scm.RepoListOptions) ([]*scm.Repository, *scm.Response, error) {
-	// gitea does not support search filters, hence calling List api without search filtering
-	return s.List(ctx, opts.ListOptions)
-}
-
-func (s *repositoryService) ListNamespace(ctx context.Context, namespace string, opts scm.ListOptions) ([]*scm.Repository, *scm.Response, error) {
-	path := fmt.Sprintf("api/v1/orgs/%s/repos?%s", namespace, encodeListOptions(opts))
-	out := []*repository{}
-	res, err := s.client.do(ctx, "GET", path, nil, &out)
-	return convertRepositoryList(out), res, err
+func (s *repositoryService) List2(ctx context.Context, orgSlug string, opts scm.ListOptions) ([]*scm.Repository, *scm.Response, error) {
+	return nil, nil, scm.ErrNotSupported
 }
 
 func (s *repositoryService) ListHooks(ctx context.Context, repo string, opts scm.ListOptions) ([]*scm.Hook, *scm.Response, error) {

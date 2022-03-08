@@ -127,6 +127,9 @@ type (
 		// ListNamespace returns a list of repos in namespace
 		ListNamespace(context.Context, string, ListOptions) ([]*Repository, *Response, error)
 
+		// List2 returns a list of repositories .
+		List2(context.Context, string, ListOptions) ([]*Repository, *Response, error)
+
 		// ListHooks returns a list or repository hooks.
 		ListHooks(context.Context, string, ListOptions) ([]*Hook, *Response, error)
 
