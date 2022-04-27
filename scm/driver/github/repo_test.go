@@ -173,6 +173,40 @@ func TestRepositoryListV2(t *testing.T) {
 	t.Run("Page", testPage(res))
 }
 
+func TestRepositoryList2(t *testing.T) {
+	defer gock.Off()
+
+	gock.New("https://api.github.com").
+		Get("user/installations/25133923/repositories").
+		MatchParam("page", "1").
+		MatchParam("per_page", "30").
+		Reply(200).
+		Type("application/json").
+		SetHeaders(mockHeaders).
+		SetHeaders(mockPageHeaders).
+		File("testdata/repos2.json")
+
+	client := NewDefault()
+	got, res, err := client.Repositories.List2(context.Background(), "25133923", scm.ListOptions{Page: 1, Size: 30})
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	want := []*scm.Repository{}
+	raw, _ := ioutil.ReadFile("testdata/repos2.json.golden")
+	_ = json.Unmarshal(raw, &want)
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("Unexpected Results")
+		t.Log(diff)
+	}
+
+	t.Run("Request", testRequest(res))
+	t.Run("Rate", testRate(res))
+	t.Run("Page", testPage(res))
+}
+
 func TestGithubAppInstallationList(t *testing.T) {
 	defer gock.Off()
 
@@ -187,7 +221,7 @@ func TestGithubAppInstallationList(t *testing.T) {
 		File("testdata/github_app_repos.json")
 
 	client := NewDefault()
-	got, res, err := client.Repositories.(*RepositoryService).ListByInstallation(context.Background(), scm.ListOptions{Page: 1, Size: 30})
+	got, res, err := client.Repositories.List(context.Background(), scm.ListOptions{Page: 1, Size: 30})
 	if err != nil {
 		t.Error(err)
 		return
@@ -267,45 +301,6 @@ func TestStatusCreate(t *testing.T) {
 
 	want := new(scm.Status)
 	raw, _ := ioutil.ReadFile("testdata/status.json.golden")
-	_ = json.Unmarshal(raw, want)
-
-	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("Unexpected Results")
-		t.Log(diff)
-	}
-
-	t.Run("Request", testRequest(res))
-	t.Run("Rate", testRate(res))
-}
-
-func TestDeployStatusCreate(t *testing.T) {
-	defer gock.Off()
-
-	gock.New("https://api.github.com").
-		Post("/repos/octocat/hello-world/deployments/1/status").
-		Reply(201).
-		Type("application/json").
-		SetHeaders(mockHeaders).
-		File("testdata/deployment.json")
-
-	in := &scm.DeployStatus{
-		Number:         1,
-		Desc:           "Build has completed successfully",
-		State:          scm.StateSuccess,
-		Target:         "https://ci.example.com/1000/output",
-		Environment:    "production",
-		EnvironmentURL: "https://example.netlify.com",
-	}
-
-	client := NewDefault()
-	got, res, err := client.Repositories.(*RepositoryService).CreateDeployStatus(context.Background(), "octocat/hello-world", in)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	want := new(scm.DeployStatus)
-	raw, _ := ioutil.ReadFile("testdata/deployment.json.golden")
 	_ = json.Unmarshal(raw, want)
 
 	if diff := cmp.Diff(got, want); diff != "" {
