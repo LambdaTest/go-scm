@@ -2,20 +2,13 @@ name: Release
 
 on:
   push:
-    branches:
-      - main
+    branches: [ master ]
 
 jobs:
   Release:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Check Patch Label
-        id: check_pr_labels_patch
-        uses: shioyang/check-pr-labels-on-push-action@v1.0.3
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          labels: '["release:patch"]'
 
       - name: Check Minor Label
         id: check_pr_labels_minor
@@ -67,3 +60,13 @@ jobs:
           tag: ${{ steps.tag_version.outputs.new_tag }}
           name: Release ${{ steps.tag_version.outputs.new_tag }}
           body: ${{ steps.changelog.outputs.changelog }}
+      
+      # Notifies on slack
+      - uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          fields: repo,message,commit,author,action,eventName,ref,workflow,job,took
+          author_name: GO SCM Releaser
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        if: always()
