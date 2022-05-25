@@ -91,5 +91,8 @@ func convertMembership(from *membership) *scm.Membership {
 	default:
 		to.Role = scm.RoleUndefined
 	}
+
+	to.Organization.Name = from.Organization.Login
+	to.Organization.Avatar = from.Organization.Avatar
 	return to
 }
