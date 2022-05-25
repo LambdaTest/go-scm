@@ -32,7 +32,7 @@ func (s *organizationService) FindMembership(ctx context.Context, name, username
 func (s *organizationService) ListMemberships(ctx context.Context, opts scm.ListOptions) ([]*scm.Membership, *scm.Response, error) {
 	path := fmt.Sprintf("/user/memberships/orgs?%s", encodeListOptions(opts))
 	out := []*membership{}
-	res, err := s.client.do(ctx, "GET", path, nil, out)
+	res, err := s.client.do(ctx, "GET", path, nil, &out)
 	return convertMemberships(out), res, err
 }
 
