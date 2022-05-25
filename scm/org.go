@@ -17,8 +17,9 @@ type (
 
 	// Membership represents an organization membership.
 	Membership struct {
-		Active bool
-		Role   Role
+		Active       bool
+		Role         Role
+		Organization Organization
 	}
 
 	// OrganizationService provides access to organization resources.
