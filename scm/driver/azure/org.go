@@ -22,6 +22,10 @@ func (s *organizationService) FindMembership(ctx context.Context, name, username
 	return nil, nil, scm.ErrNotSupported
 }
 
+func (s *organizationService) ListMemberships(ctx context.Context) ([]*scm.Membership, *scm.Response, error) {
+	return nil, nil, scm.ErrNotSupported
+}
+
 func (s *organizationService) List(ctx context.Context, opts scm.ListOptions) ([]*scm.Organization, *scm.Response, error) {
 	return nil, nil, scm.ErrNotSupported
 }
