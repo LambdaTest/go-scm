@@ -30,6 +30,9 @@ type (
 		// by a given user account.
 		FindMembership(ctx context.Context, name, username string) (*Membership, *Response, error)
 
+		// ListMemberships returns the organizations membership for authenticated user
+		ListMemberships(ctx context.Context) ([]*Membership, *Response, error)
+
 		// List returns the user organization list.
 		List(ctx context.Context, opts ListOptions) ([]*Organization, *Response, error)
 	}
