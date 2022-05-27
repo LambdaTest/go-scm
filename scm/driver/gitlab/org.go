@@ -40,9 +40,21 @@ func (s *organizationService) ListMemberships(ctx context.Context, orgNameList [
 	}
 
 	for _, v := range orgNameList {
-		member, _, err := s.FindMembership(ctx, v, strconv.Itoa(userInfo.ID))
-		if err != nil {
-			return nil, res, err
+		var member *scm.Membership
+		if username == v {
+			member = &scm.Membership{
+				Role:   scm.RoleAdmin,
+				Active: true,
+				Organization: scm.Organization{
+					Name:   username,
+					Avatar: "",
+				},
+			}
+		} else {
+			member, _, err = s.FindMembership(ctx, v, strconv.Itoa(userInfo.ID))
+			if err != nil {
+				return nil, res, err
+			}
 		}
 
 		out = append(out, member)
