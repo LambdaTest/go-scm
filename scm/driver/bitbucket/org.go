@@ -27,7 +27,11 @@ func (s *organizationService) FindMembership(ctx context.Context, name, username
 }
 
 func (s *organizationService) ListMemberships(ctx context.Context, orgNameList []string, username string, opts scm.ListOptions) ([]*scm.Membership, *scm.Response, error) {
-	return nil, nil, scm.ErrNotSupported
+	path := fmt.Sprintf("2.0/user/permissions/workspaces?%s", encodeListRoleOptions(opts))
+	out := new(membershipList)
+	res, err := s.client.do(ctx, "GET", path, nil, out)
+	copyPagination(out.pagination, res)
+	return convertMembershipList(out), res, err
 }
 
 func (s *organizationService) List(ctx context.Context, opts scm.ListOptions) ([]*scm.Organization, *scm.Response, error) {
@@ -46,9 +50,29 @@ func convertOrganizationList(from *organizationList) []*scm.Organization {
 	return to
 }
 
+func convertMembershipList(from *membershipList) []*scm.Membership {
+	to := []*scm.Membership{}
+	for _, v := range from.Values {
+		to = append(to, convertMembership(v))
+	}
+	return to
+}
+
 type organizationList struct {
 	pagination
 	Values []*organization `json:"values"`
+}
+
+type membershipList struct {
+	pagination
+	Values []*membership `json:"values"`
+}
+
+type membership struct {
+	Permission string `json:"permission"`
+	Workspace  struct {
+		Slug string `json:"slug"`
+	} `json:"workspace"`
 }
 
 type organization struct {
@@ -60,4 +84,21 @@ func convertOrganization(from *organization) *scm.Organization {
 		Name:   from.Login,
 		Avatar: fmt.Sprintf("https://bitbucket.org/account/%s/avatar/32/", from.Login),
 	}
+}
+
+func convertMembership(from *membership) *scm.Membership {
+	to := new(scm.Membership)
+	to.Active = true
+
+	switch from.Permission {
+	case "owner":
+		to.Role = scm.RoleAdmin
+	case "collaborator":
+		to.Role = scm.RoleMember
+	default:
+		to.Role = scm.RoleViewer
+	}
+
+	to.Organization.Name = from.Workspace.Slug
+	return to
 }
