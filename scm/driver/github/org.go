@@ -29,11 +29,23 @@ func (s *organizationService) FindMembership(ctx context.Context, name, username
 	return convertMembership(out), res, err
 }
 
-func (s *organizationService) ListMemberships(ctx context.Context, opts scm.ListOptions) ([]*scm.Membership, *scm.Response, error) {
+func (s *organizationService) ListMemberships(ctx context.Context, orgNameList []string, username string, opts scm.ListOptions) ([]*scm.Membership, *scm.Response, error) {
 	path := fmt.Sprintf("/user/memberships/orgs?%s", encodeListOptions(opts))
 	out := []*membership{}
 	res, err := s.client.do(ctx, "GET", path, nil, &out)
-	return convertMemberships(out), res, err
+	orgMemberships := convertMemberships(out)
+
+	usernameMembership := &scm.Membership{
+		Role:   scm.RoleAdmin,
+		Active: true,
+		Organization: scm.Organization{
+			Name:   username,
+			Avatar: "",
+		},
+	}
+	orgMemberships = append(orgMemberships, usernameMembership)
+
+	return orgMemberships, res, err
 }
 
 func (s *organizationService) List(ctx context.Context, opts scm.ListOptions) ([]*scm.Organization, *scm.Response, error) {
@@ -89,7 +101,7 @@ func convertMembership(from *membership) *scm.Membership {
 	case "member":
 		to.Role = scm.RoleMember
 	default:
-		to.Role = scm.RoleUndefined
+		to.Role = scm.RoleViewer
 	}
 
 	to.Organization.Name = from.Organization.Login

@@ -63,9 +63,13 @@ func TestOrganizationFindMembership(t *testing.T) {
 		return
 	}
 
+	t.Log(got)
+
 	want := new(scm.Membership)
 	raw, _ := ioutil.ReadFile("testdata/membership.json.golden")
 	_ = json.Unmarshal(raw, want)
+
+	t.Log(want)
 
 	if diff := cmp.Diff(got, want); diff != "" {
 		t.Errorf("Unexpected Results")
