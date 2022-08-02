@@ -54,6 +54,10 @@ func (s *RepositoryService) ListNamespace(ctx context.Context, namespace string,
 	return nil, nil, scm.ErrNotSupported
 }
 
+func (s *RepositoryService) ListRepoLanguages(context.Context, string) (map[string]float64, *scm.Response, error) {
+	return nil, nil, scm.ErrNotSupported
+}
+
 func (s *RepositoryService) ListHooks(ctx context.Context, repo string, opts scm.ListOptions) ([]*scm.Hook, *scm.Response, error) {
 	path := fmt.Sprintf("repos/%s/hooks?%s", repo, encodeListOptions(opts))
 	out := []*hook{}

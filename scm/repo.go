@@ -127,6 +127,12 @@ type (
 		// ListNamespace returns a list of repos in namespace
 		ListNamespace(context.Context, string, ListOptions) ([]*Repository, *Response, error)
 
+		// List2 returns a list of repositories .
+		List2(context.Context, string, ListOptions) ([]*Repository, *Response, error)
+
+		// ListRepoLanguages returns a list of repositories language with percentage.
+		ListRepoLanguages(context.Context, string) (map[string]float64, *Response, error)
+
 		// ListHooks returns a list or repository hooks.
 		ListHooks(context.Context, string, ListOptions) ([]*Hook, *Response, error)
 

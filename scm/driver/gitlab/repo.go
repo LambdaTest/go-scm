@@ -109,6 +109,13 @@ func (s *repositoryService) ListNamespace(ctx context.Context, namespace string,
 	return convertRepositoryList(out), res, err
 }
 
+func (s *repositoryService) ListRepoLanguages(ctx context.Context, repo string) (map[string]float64, *scm.Response, error) {
+	path := fmt.Sprintf("api/v4/projects/%s/languages", encode(repo))
+	out := map[string]float64{}
+	res, err := s.client.do(ctx, "GET", path, nil, &out)
+	return out, res, err
+}
+
 func (s *repositoryService) ListHooks(ctx context.Context, repo string, opts scm.ListOptions) ([]*scm.Hook, *scm.Response, error) {
 	path := fmt.Sprintf("api/v4/projects/%s/hooks?%s", encode(repo), encodeListOptions(opts))
 	out := []*hook{}
