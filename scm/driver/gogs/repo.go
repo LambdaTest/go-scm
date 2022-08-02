@@ -49,6 +49,10 @@ func (s *repositoryService) List2(ctx context.Context, orgSlug string, opts scm.
 	return nil, nil, scm.ErrNotSupported
 }
 
+func (s *repositoryService) ListRepoLanguages(context.Context, string) (map[string]float64, *scm.Response, error) {
+	return nil, nil, scm.ErrNotSupported
+}
+
 func (s *repositoryService) ListHooks(ctx context.Context, repo string, _ scm.ListOptions) ([]*scm.Hook, *scm.Response, error) {
 	path := fmt.Sprintf("api/v1/repos/%s/hooks", repo)
 	out := []*hook{}

@@ -208,6 +208,10 @@ func (s *repositoryService) List2(ctx context.Context, orgSlug string, opts scm.
 	return nil, nil, scm.ErrNotSupported
 }
 
+func (s *repositoryService) ListRepoLanguages(context.Context, string) (map[string]float64, *scm.Response, error) {
+	return nil, nil, scm.ErrNotSupported
+}
+
 // listWrite returns the user repository list.
 func (s *repositoryService) listWrite(ctx context.Context, repo string) ([]*scm.Repository, *scm.Response, error) {
 	_, name := scm.Split(repo)
