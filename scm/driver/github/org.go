@@ -91,8 +91,7 @@ func convertMemberships(from []*membership) []*scm.Membership {
 
 func convertMembership(from *membership) *scm.Membership {
 	to := new(scm.Membership)
-	switch from.State {
-	case "active":
+	if from.State == "active" {
 		to.Active = true
 	}
 	switch from.Role {
