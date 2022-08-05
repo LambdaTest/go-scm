@@ -25,9 +25,10 @@ func (s *organizationService) Find(ctx context.Context, name string) (*scm.Organ
 }
 
 func (s *organizationService) FindMembership(ctx context.Context, name, userID string) (*scm.Membership, *scm.Response, error) {
-	path := fmt.Sprintf("api/v4/groups/%s/billable_members/%s/memberships", name, userID)
+	path := fmt.Sprintf("api/v4/groups/%s/members/%s", name, userID)
 	out := new(membership)
 	res, err := s.client.do(ctx, "GET", path, nil, out)
+	out.OrgName = name
 	return convertMembership(out), res, err
 }
 
@@ -93,13 +94,16 @@ func convertOrganization(from *organization) *scm.Organization {
 
 func convertMembership(from *membership) *scm.Membership {
 	to := new(scm.Membership)
-	to.Active = true
-	to.Organization.Name = from.OrgName
 
-	switch from.Access.Role {
-	case "Owner":
+	to.Organization.Name = from.OrgName
+	if from.State == "active" {
+		to.Active = true
+	}
+
+	switch from.Access {
+	case 50:
 		to.Role = scm.RoleAdmin
-	case "Maintainer", "Developer":
+	case 40, 30:
 		to.Role = scm.RoleMember
 	default:
 		to.Role = scm.RoleViewer
@@ -110,7 +114,6 @@ func convertMembership(from *membership) *scm.Membership {
 
 type membership struct {
 	OrgName string `json:"source_full_name"`
-	Access  struct {
-		Role string `json:"string_value"`
-	} `json:"access_level"`
+	Access  int    `json:"access_level"`
+	State   string `json:"membership_state"`
 }
