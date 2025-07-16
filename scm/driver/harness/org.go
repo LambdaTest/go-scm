@@ -28,6 +28,10 @@ func (s *organizationService) List(ctx context.Context, opts scm.ListOptions) ([
 
 }
 
+func (s *organizationService) ListMemberships(ctx context.Context, orgNameList []string, username string, opts scm.ListOptions) ([]*scm.Membership, *scm.Response, error) {
+	return nil, nil, scm.ErrNotSupported
+}
+
 //
 // native data structures
 //

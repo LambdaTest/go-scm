@@ -98,6 +98,10 @@ func (s *repositoryService) List2(ctx context.Context, orgSlug string, opts scm.
 	return nil, nil, scm.ErrNotSupported
 }
 
+func (s *repositoryService) ListV2(ctx context.Context, opts scm.RepoListOptions) ([]*scm.Repository, *scm.Response, error) {
+	return nil, nil, scm.ErrNotSupported
+}
+
 func (s *repositoryService) ListRepoLanguages(ctx context.Context, repo string) (map[string]float64, *scm.Response, error) {
 	path := fmt.Sprintf("api/v4/projects/%s/languages", encode(repo))
 	out := map[string]float64{}

@@ -44,6 +44,25 @@ func (s *userService) FindEmail(ctx context.Context) (string, *scm.Response, err
 	return "", res, errors.New("no primary email found")
 }
 
+func (s *userService) ListEmail(ctx context.Context, opts scm.ListOptions) ([]*scm.Email, *scm.Response, error) {
+	path := fmt.Sprintf("2.0/user/emails?%s", encodeListOptions(opts))
+	out := new(emails)
+	res, err := s.client.do(ctx, "GET", path, nil, out)
+	if err != nil {
+		return nil, res, err
+	}
+
+	emails := make([]*scm.Email, len(out.Values))
+	for i, emailObj := range out.Values {
+		emails[i] = &scm.Email{
+			Value:    emailObj.Email,
+			Primary:  emailObj.IsPrimary,
+			Verified: emailObj.IsConfirmed,
+		}
+	}
+	return emails, res, nil
+}
+
 type user struct {
 	// The `username` field is no longer available after 29 April 2019 in
 	// accordance with GDPR regulations. See:

@@ -172,6 +172,10 @@ func (s *repositoryService) List(ctx context.Context, opts scm.ListOptions) ([]*
 	return convertRepositoryList(out), res, err
 }
 
+func (s *repositoryService) ListV2(ctx context.Context, opts scm.RepoListOptions) ([]*scm.Repository, *scm.Response, error) {
+	return nil, nil, scm.ErrNotSupported
+}
+
 func (s *repositoryService) ListRepoLanguages(context.Context, string) (map[string]float64, *scm.Response, error) {
 	return nil, nil, scm.ErrNotSupported
 }

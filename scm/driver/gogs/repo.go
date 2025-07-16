@@ -107,6 +107,10 @@ func (s *repositoryService) DeleteHook(ctx context.Context, repo string, id stri
 	return s.client.do(ctx, "DELETE", path, nil, nil)
 }
 
+func (s *repositoryService) ListV2(ctx context.Context, opts scm.RepoListOptions) ([]*scm.Repository, *scm.Response, error) {
+	return nil, nil, scm.ErrNotSupported
+}
+
 //
 // native data structures
 //

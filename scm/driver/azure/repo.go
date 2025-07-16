@@ -292,3 +292,7 @@ func convertHook(from *subscription) *scm.Hook {
 
 	return returnVal
 }
+
+func (s *RepositoryService) ListV2(ctx context.Context, opts scm.RepoListOptions) ([]*scm.Repository, *scm.Response, error) {
+	return nil, nil, scm.ErrNotSupported
+}
