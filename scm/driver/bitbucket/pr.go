@@ -13,7 +13,7 @@ import (
 )
 
 type pullService struct {
-	*issueService
+	client *wrapper
 }
 
 func (s *pullService) Find(ctx context.Context, repo string, number int) (*scm.PullRequest, *scm.Response, error) {
@@ -69,6 +69,27 @@ func (s *pullService) Create(ctx context.Context, repo string, input *scm.PullRe
 	return convertPullRequest(out), res, err
 }
 
+func (s *pullService) FindComment(ctx context.Context, repo string, index, id int) (*scm.Comment, *scm.Response, error) {
+	return nil, nil, scm.ErrNotSupported
+}
+
+func (s *pullService) ListComments(ctx context.Context, repo string, index int, opts scm.ListOptions) ([]*scm.Comment, *scm.Response, error) {
+	return nil, nil, scm.ErrNotSupported
+}
+
+func (s *pullService) CreateComment(ctx context.Context, repo string, number int, input *scm.CommentInput) (*scm.Comment, *scm.Response, error) {
+	path := fmt.Sprintf("2.0/repositories/%s/pullrequests/%d/comments", repo, number)
+	in := &prCommentInput{}
+	in.Content.Raw = input.Body
+	out := new(prComment)
+	res, err := s.client.do(ctx, "POST", path, in, out)
+	return convertPullRequestComment(out), res, err
+}
+
+func (s *pullService) DeleteComment(ctx context.Context, repo string, number, id int) (*scm.Response, error) {
+	return nil, scm.ErrNotSupported
+}
+
 type reference struct {
 	Commit struct {
 		Hash  string `json:"hash"`
@@ -108,6 +129,10 @@ type pr struct {
 		HTML   string `json:"html"`
 		Type   string `json:"type"`
 	} `json:"summary"`
+	MergeCommit struct {
+		Type string `json:"type"`
+		Hash string `json:"hash"`
+	} `json:"merge_commit"`
 	Source    reference `json:"source"`
 	State     string    `json:"state"`
 	Author    user      `json:"author"`
@@ -149,6 +174,7 @@ func convertPullRequest(from *pr) *scm.PullRequest {
 		Title:  from.Title,
 		Body:   from.Description,
 		Sha:    from.Source.Commit.Hash,
+		Merge:  from.MergeCommit.Hash,
 		Source: from.Source.Branch.Name,
 		Target: from.Destination.Branch.Name,
 		Fork:   from.Source.Repository.FullName,
@@ -167,9 +193,24 @@ func convertPullRequest(from *pr) *scm.PullRequest {
 			Sha:  from.Destination.Commit.Hash,
 		},
 		Author: scm.User{
-			Login:  from.Author.Nickname,
+			ID:     from.Author.AccountID,
 			Name:   from.Author.DisplayName,
 			Avatar: from.Author.Links.Avatar.Href,
+		},
+		Created: from.CreatedOn,
+		Updated: from.UpdatedOn,
+	}
+}
+
+func convertPullRequestComment(from *prComment) *scm.Comment {
+	return &scm.Comment{
+		ID:   from.ID,
+		Body: from.Content.Raw,
+		Author: scm.User{
+			ID:     from.User.UUID,
+			Login:  from.User.Nickname,
+			Name:   from.User.DisplayName,
+			Avatar: from.User.Links.Avatar.Href,
 		},
 		Created: from.CreatedOn,
 		Updated: from.UpdatedOn,

@@ -39,7 +39,7 @@ func (s *pullService) ListChanges(ctx context.Context, repo string, number int, 
 }
 
 func (s *pullService) ListCommits(ctx context.Context, repo string, number int, opts scm.ListOptions) ([]*scm.Commit, *scm.Response, error) {
-	path := fmt.Sprintf("/repos/%s/pulls/%d/commits?%s", repo, number, encodeListOptions(opts))
+	path := fmt.Sprintf("repos/%s/pulls/%d/commits?%s", repo, number, encodeListOptions(opts))
 	out := []*commit{}
 	res, err := s.client.do(ctx, "GET", path, nil, &out)
 	return convertCommitList(out), res, err
@@ -76,6 +76,7 @@ type pr struct {
 	State   string `json:"state"`
 	Title   string `json:"title"`
 	Body    string `json:"body"`
+	Draft   bool   `json:"draft"`
 	DiffURL string `json:"diff_url"`
 	HTMLURL string `json:"html_url"`
 	User    struct {
@@ -154,6 +155,7 @@ func convertPullRequest(from *pr) *scm.PullRequest {
 		Fork:   from.Head.Repo.FullName,
 		Link:   from.HTMLURL,
 		Diff:   from.DiffURL,
+		Draft:  from.Draft,
 		Closed: from.State != "open",
 		Merged: from.MergedAt.String != "",
 		Head: scm.Reference{

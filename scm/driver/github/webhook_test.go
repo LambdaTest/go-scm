@@ -25,9 +25,7 @@ func TestWebhooks(t *testing.T) {
 		after  string
 		obj    interface{}
 	}{
-		//
 		// push events
-		//
 
 		// push hooks
 		{
@@ -126,6 +124,13 @@ func TestWebhooks(t *testing.T) {
 			after:  "testdata/webhooks/pr_sync.json.golden",
 			obj:    new(scm.PullRequestHook),
 		},
+		// pull request ready for review
+		{
+			event:  "pull_request",
+			before: "testdata/webhooks/pr_ready_for_review.json",
+			after:  "testdata/webhooks/pr_ready_for_review.json.golden",
+			obj:    new(scm.PullRequestHook),
+		},
 		// pull request opened
 		{
 			event:  "pull_request",
@@ -184,6 +189,57 @@ func TestWebhooks(t *testing.T) {
 			before: "testdata/webhooks/deployment_commit.json",
 			after:  "testdata/webhooks/deployment_commit.json.golden",
 			obj:    new(scm.DeployHook),
+		},
+		//
+		// release
+		//
+		{
+			event:  "release",
+			before: "testdata/webhooks/release_published.json",
+			after:  "testdata/webhooks/release_published.json.golden",
+			obj:    new(scm.ReleaseHook),
+		},
+		{
+			event:  "release",
+			before: "testdata/webhooks/release_unpublished.json",
+			after:  "testdata/webhooks/release_unpublished.json.golden",
+			obj:    new(scm.ReleaseHook),
+		},
+		{
+			event:  "release",
+			before: "testdata/webhooks/release_created.json",
+			after:  "testdata/webhooks/release_created.json.golden",
+			obj:    new(scm.ReleaseHook),
+		},
+		{
+			event:  "release",
+			before: "testdata/webhooks/release_edited.json",
+			after:  "testdata/webhooks/release_edited.json.golden",
+			obj:    new(scm.ReleaseHook),
+		},
+		{
+			event:  "release",
+			before: "testdata/webhooks/release_deleted.json",
+			after:  "testdata/webhooks/release_deleted.json.golden",
+			obj:    new(scm.ReleaseHook),
+		},
+		{
+			event:  "release",
+			before: "testdata/webhooks/release_prereleased.json",
+			after:  "testdata/webhooks/release_prereleased.json.golden",
+			obj:    new(scm.ReleaseHook),
+		},
+		{
+			event:  "release",
+			before: "testdata/webhooks/release_released.json",
+			after:  "testdata/webhooks/release_released.json.golden",
+			obj:    new(scm.ReleaseHook),
+		},
+		{
+			event:  "workflow_run",
+			before: "testdata/webhooks/pipeline_hook.json",
+			after:  "testdata/webhooks/pipeline_hook.json.golden",
+			obj:    new(scm.PipelineHook),
 		},
 	}
 

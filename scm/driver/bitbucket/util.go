@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/drone/go-scm/scm"
 )
@@ -22,6 +23,26 @@ func extractEmail(gitauthor string) (author string) {
 		author = matches[0][1]
 	}
 	return
+}
+
+func encodeBranchListOptions(opts scm.BranchListOptions) string {
+	params := url.Values{}
+	if opts.SearchTerm != "" {
+		var sb strings.Builder
+		sb.WriteString("name~\"")
+		sb.WriteString(opts.SearchTerm)
+		sb.WriteString("\"")
+		params.Set("q", sb.String())
+	}
+	if opts.PageListOptions != (scm.ListOptions{}) {
+		if opts.PageListOptions.Page != 0 {
+			params.Set("page", strconv.Itoa(opts.PageListOptions.Page))
+		}
+		if opts.PageListOptions.Size != 0 {
+			params.Set("pagelen", strconv.Itoa(opts.PageListOptions.Size))
+		}
+	}
+	return params.Encode()
 }
 
 func encodeListOptions(opts scm.ListOptions) string {
@@ -42,6 +63,27 @@ func encodeListRoleOptions(opts scm.ListOptions) string {
 	}
 	if opts.Size != 0 {
 		params.Set("pagelen", strconv.Itoa(opts.Size))
+	}
+	params.Set("role", "member")
+	return params.Encode()
+}
+
+func encodeRepoListOptions(opts scm.RepoListOptions) string {
+	params := url.Values{}
+	if opts.RepoSearchTerm.RepoName != "" {
+		var sb strings.Builder
+		sb.WriteString("name~\"")
+		sb.WriteString(opts.RepoSearchTerm.RepoName)
+		sb.WriteString("\"")
+		params.Set("q", sb.String())
+	}
+	if opts.ListOptions != (scm.ListOptions{}) {
+		if opts.ListOptions.Page != 0 {
+			params.Set("page", strconv.Itoa(opts.ListOptions.Page))
+		}
+		if opts.ListOptions.Size != 0 {
+			params.Set("pagelen", strconv.Itoa(opts.ListOptions.Size))
+		}
 	}
 	params.Set("role", "member")
 	return params.Encode()

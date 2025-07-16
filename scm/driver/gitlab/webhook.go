@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/drone/go-scm/scm"
 	"github.com/drone/go-scm/scm/driver/internal/null"
@@ -36,6 +37,12 @@ func (s *webhookService) Parse(req *http.Request, fn scm.SecretFunc) (scm.Webhoo
 		return nil, scm.ErrUnknownEvent
 	case "Merge Request Hook":
 		hook, err = parsePullRequestHook(data)
+	case "Note Hook":
+		hook, err = parseIssueCommentHook(data)
+	case "System Hook":
+		hook, err = parseSystemHook(data)
+	case "Pipeline Hook":
+		return parsePipelineHook(data)
 	default:
 		return nil, scm.ErrUnknownEvent
 	}
@@ -58,6 +65,49 @@ func (s *webhookService) Parse(req *http.Request, fn scm.SecretFunc) (scm.Webhoo
 	}
 
 	return hook, nil
+}
+
+func parseSystemHook(data []byte) (scm.Webhook, error) {
+	src := new(event)
+	err := json.Unmarshal(data, src)
+	if err != nil {
+		return nil, err
+	}
+	switch src.ObjectKind {
+	case "push", "tag_push":
+		return parsePushHook(data)
+	case "issue":
+		return nil, scm.ErrUnknownEvent
+	case "merge_request":
+		return parsePullRequestHook(data)
+	case "note":
+		return parseIssueCommentHook(data)
+	default:
+		return nil, scm.ErrUnknownEvent
+	}
+}
+
+func parseIssueCommentHook(data []byte) (scm.Webhook, error) {
+	src := new(commentHook)
+	err := json.Unmarshal(data, src)
+	if err != nil {
+		return nil, err
+	}
+	dst, err := convertCommentHook(src)
+	if err != nil {
+		return nil, err
+	}
+	return dst, nil
+}
+
+func parsePipelineHook(data []byte) (scm.Webhook, error) {
+	src := new(pipelineHook)
+	err := json.Unmarshal(data, src)
+	if err != nil {
+		return nil, err
+	}
+	dst, err := convertPipelineHook(src), nil
+	return dst, nil
 }
 
 func parsePushHook(data []byte) (scm.Webhook, error) {
@@ -205,6 +255,78 @@ func converBranchHook(src *pushHook) *scm.BranchHook {
 	}
 }
 
+func convertCommentHook(src *commentHook) (*scm.IssueCommentHook, error) {
+	var issue scm.Issue
+	var comment scm.Comment
+
+	switch src.ObjectAttributes.NoteableType {
+	case "Commit", "Issue", "Snippet":
+		return nil, scm.ErrUnknownEvent
+	case "MergeRequest":
+		pr := scm.PullRequest{
+			Number:  src.MergeRequest.Iid,
+			Title:   src.MergeRequest.Title,
+			Body:    src.MergeRequest.Description,
+			Sha:     src.MergeRequest.LastCommit.ID,
+			Ref:     fmt.Sprintf("refs/merge-requests/%d/head", src.MergeRequest.Iid),
+			Source:  src.MergeRequest.SourceBranch,
+			Target:  src.MergeRequest.TargetBranch,
+			Link:    src.MergeRequest.URL,
+			Draft:   src.MergeRequest.WorkInProgress,
+			Closed:  src.MergeRequest.State != "opened",
+			Merged:  src.MergeRequest.State == "merged",
+			Author:  *convertUser(&src.User),
+			Created: parseTimeString(src.MergeRequest.CreatedAt),
+			Updated: parseTimeString(src.MergeRequest.UpdatedAt),
+		}
+		for _, l := range src.MergeRequest.Labels {
+			label := scm.Label{
+				Name:  l.Title,
+				Color: l.Color,
+			}
+			pr.Labels = append(pr.Labels, label)
+		}
+		issue = scm.Issue{
+			Number:      src.MergeRequest.Iid,
+			Title:       src.MergeRequest.Title,
+			Body:        src.MergeRequest.Title,
+			Link:        src.Project.WebURL,
+			Author:      *convertUser(&src.User),
+			PullRequest: pr,
+			Created:     parseTimeString(src.ObjectAttributes.CreatedAt),
+			Updated:     parseTimeString(src.ObjectAttributes.UpdatedAt),
+		}
+		comment = scm.Comment{
+			ID:      src.ObjectAttributes.ID,
+			Body:    src.ObjectAttributes.Note,
+			Author:  *convertUser(&src.User),
+			Created: parseTimeString(src.ObjectAttributes.CreatedAt),
+			Updated: parseTimeString(src.ObjectAttributes.UpdatedAt),
+		}
+	default:
+		return nil, scm.ErrUnknownEvent
+	}
+
+	namespace, _ := scm.Split(src.Project.PathWithNamespace)
+	dst := scm.IssueCommentHook{
+		Action: scm.ActionCreate,
+		Repo: scm.Repository{
+			ID:        strconv.Itoa(src.Project.ID),
+			Namespace: namespace,
+			Name:      src.Repository.Name,
+			Clone:     src.Project.GitHTTPURL,
+			CloneSSH:  src.Project.GitSSHURL,
+			Link:      src.Project.WebURL,
+			Branch:    src.Project.DefaultBranch,
+			Private:   false, // TODO how do we correctly set Private vs Public?
+		},
+		Issue:   issue,
+		Comment: comment,
+		Sender:  *convertUser(&src.User),
+	}
+	return &dst, nil
+}
+
 func convertTagHook(src *pushHook) *scm.TagHook {
 	action := scm.ActionCreate
 	commit := src.After
@@ -251,6 +373,9 @@ func convertPullRequestHook(src *pullRequestHook) *scm.PullRequestHook {
 		action = scm.ActionMerge
 	case "update":
 		action = scm.ActionSync
+		if src.Changes.Draft.Previous.Bool == false && src.Changes.Draft.Current.Bool == true {
+			action = scm.ActionReviewReady
+		}
 	}
 	fork := scm.Join(
 		src.ObjectAttributes.Source.Namespace,
@@ -269,10 +394,9 @@ func convertPullRequestHook(src *pullRequestHook) *scm.PullRequestHook {
 			Target: src.ObjectAttributes.TargetBranch,
 			Fork:   fork,
 			Link:   src.ObjectAttributes.URL,
+			Draft:  src.ObjectAttributes.WorkInProgress,
 			Closed: src.ObjectAttributes.State != "opened",
 			Merged: src.ObjectAttributes.State == "merged",
-			// Created   : src.ObjectAttributes.CreatedAt,
-			// Updated  : src.ObjectAttributes.UpdatedAt, // 2017-12-10 17:01:11 UTC
 			Author: scm.User{
 				Login:  src.User.Username,
 				Name:   src.User.Name,
@@ -299,7 +423,70 @@ func convertPullRequestHook(src *pullRequestHook) *scm.PullRequestHook {
 	}
 }
 
+func parseTimeString(timeString string) time.Time {
+	layout := "2006-01-02 15:04:05 UTC"
+	// Returns zero value of time in case of an error 0001-01-01 00:00:00 +0000 UTC
+	t, _ := time.Parse(layout, timeString)
+	return t
+}
+
+func convertPipelineHook(src *pipelineHook) *scm.PipelineHook {
+	namespace, name := scm.Split(src.Project.PathWithNamespace)
+	return &scm.PipelineHook{
+		Repo: scm.Repository{
+			ID:        strconv.Itoa(src.Project.ID),
+			Namespace: namespace,
+			Name:      name,
+			Clone:     src.Project.GitHTTPURL,
+			CloneSSH:  src.Project.GitSSHURL,
+			Link:      src.Project.WebURL,
+			Branch:    src.Project.DefaultBranch,
+			Private:   false,
+		},
+		Commit: scm.Commit{
+			Sha:     src.ObjectAttributes.SHA,
+			Message: src.Commit.Message,
+			Author: scm.Signature{
+				Name:  src.Commit.Author.Name,
+				Email: src.Commit.Author.Email,
+			},
+			Committer: scm.Signature{
+				Name:  src.Commit.Author.Name,
+				Email: src.Commit.Author.Email,
+			},
+			Link: src.Commit.URL,
+		},
+		Execution: scm.Execution{
+			Number:  src.ObjectAttributes.ID,
+			Status:  scm.ConvertExecutionStatus(src.ObjectAttributes.Status),
+			Created: parseTimeString(src.ObjectAttributes.CreatedAt),
+			URL:     src.ObjectAttributes.URL,
+		},
+		Sender: scm.User{
+			Login:  src.User.Username,
+			Name:   src.User.Name,
+			Email:  src.User.Email,
+			Avatar: src.User.AvatarURL,
+		},
+		PullRequest: scm.PullRequest{
+			Number:  src.MergeRequest.ID,
+			Title:   src.MergeRequest.Title,
+			Sha:     src.ObjectAttributes.SHA,
+			Ref:     src.ObjectAttributes.Ref,
+			Source:  src.MergeRequest.SourceBranch,
+			Target:  src.MergeRequest.TargetBranch,
+			Link:    src.MergeRequest.URL,
+			Created: parseTimeString(src.ObjectAttributes.CreatedAt),
+		},
+	}
+}
+
 type (
+	// Generic struct to detect event type
+	event struct {
+		ObjectKind string `json:"object_kind"`
+	}
+
 	pushHook struct {
 		ObjectKind   string      `json:"object_kind"`
 		EventName    string      `json:"event_name"`
@@ -359,13 +546,10 @@ type (
 
 	commentHook struct {
 		ObjectKind string `json:"object_kind"`
-		User       struct {
-			Name      string `json:"name"`
-			Username  string `json:"username"`
-			AvatarURL string `json:"avatar_url"`
-		} `json:"user"`
-		ProjectID int `json:"project_id"`
-		Project   struct {
+		EventType  string `json:"event_type"`
+		User       user   `json:"user"`
+		ProjectID  int    `json:"project_id"`
+		Project    struct {
 			ID                int         `json:"id"`
 			Name              string      `json:"name"`
 			Description       string      `json:"description"`
@@ -384,56 +568,29 @@ type (
 			HTTPURL           string      `json:"http_url"`
 		} `json:"project"`
 		ObjectAttributes struct {
-			ID           int         `json:"id"`
-			Note         string      `json:"note"`
-			NoteableType string      `json:"noteable_type"`
-			AuthorID     int         `json:"author_id"`
-			CreatedAt    string      `json:"created_at"`
-			UpdatedAt    string      `json:"updated_at"`
-			ProjectID    int         `json:"project_id"`
-			Attachment   interface{} `json:"attachment"`
-			LineCode     string      `json:"line_code"`
-			CommitID     string      `json:"commit_id"`
-			NoteableID   int         `json:"noteable_id"`
-			StDiff       interface{} `json:"st_diff"`
-			System       bool        `json:"system"`
-			UpdatedByID  interface{} `json:"updated_by_id"`
-			Type         string      `json:"type"`
-			Position     struct {
-				BaseSha      string      `json:"base_sha"`
-				StartSha     string      `json:"start_sha"`
-				HeadSha      string      `json:"head_sha"`
-				OldPath      string      `json:"old_path"`
-				NewPath      string      `json:"new_path"`
-				PositionType string      `json:"position_type"`
-				OldLine      interface{} `json:"old_line"`
-				NewLine      int         `json:"new_line"`
-			} `json:"position"`
-			OriginalPosition struct {
-				BaseSha      string      `json:"base_sha"`
-				StartSha     string      `json:"start_sha"`
-				HeadSha      string      `json:"head_sha"`
-				OldPath      string      `json:"old_path"`
-				NewPath      string      `json:"new_path"`
-				PositionType string      `json:"position_type"`
-				OldLine      interface{} `json:"old_line"`
-				NewLine      int         `json:"new_line"`
-			} `json:"original_position"`
-			ResolvedAt     interface{} `json:"resolved_at"`
-			ResolvedByID   interface{} `json:"resolved_by_id"`
-			DiscussionID   string      `json:"discussion_id"`
-			ChangePosition struct {
-				BaseSha      interface{} `json:"base_sha"`
-				StartSha     interface{} `json:"start_sha"`
-				HeadSha      interface{} `json:"head_sha"`
-				OldPath      interface{} `json:"old_path"`
-				NewPath      interface{} `json:"new_path"`
-				PositionType string      `json:"position_type"`
-				OldLine      interface{} `json:"old_line"`
-				NewLine      interface{} `json:"new_line"`
-			} `json:"change_position"`
-			ResolvedByPush interface{} `json:"resolved_by_push"`
-			URL            string      `json:"url"`
+			ID               int         `json:"id"`
+			Note             string      `json:"note"`
+			NoteableType     string      `json:"noteable_type"`
+			AuthorID         int         `json:"author_id"`
+			CreatedAt        string      `json:"created_at"`
+			UpdatedAt        string      `json:"updated_at"`
+			ProjectID        int         `json:"project_id"`
+			Attachment       interface{} `json:"attachment"`
+			LineCode         string      `json:"line_code"`
+			CommitID         string      `json:"commit_id"`
+			NoteableID       int         `json:"noteable_id"`
+			StDiff           interface{} `json:"st_diff"`
+			System           bool        `json:"system"`
+			ResolvedAt       interface{} `json:"resolved_at"`
+			ResolvedByID     interface{} `json:"resolved_by_id"`
+			ResolvedByPush   interface{} `json:"resolved_by_push"`
+			DiscussionID     string      `json:"discussion_id"`
+			URL              string      `json:"url"`
+			Position         interface{} `json:"position"`
+			OriginalPosition interface{} `json:"original_position"`
+			ChangePosition   interface{} `json:"change_position"`
+			Type             interface{} `json:"type"`
+			Description      string      `json:"description"`
 		} `json:"object_attributes"`
 		Repository struct {
 			Name        string `json:"name"`
@@ -442,34 +599,44 @@ type (
 			Homepage    string `json:"homepage"`
 		} `json:"repository"`
 		MergeRequest struct {
-			AssigneeID                interface{} `json:"assignee_id"`
-			AuthorID                  int         `json:"author_id"`
-			CreatedAt                 string      `json:"created_at"`
-			DeletedAt                 interface{} `json:"deleted_at"`
-			Description               string      `json:"description"`
-			HeadPipelineID            interface{} `json:"head_pipeline_id"`
-			ID                        int         `json:"id"`
-			Iid                       int         `json:"iid"`
-			LastEditedAt              interface{} `json:"last_edited_at"`
-			LastEditedByID            interface{} `json:"last_edited_by_id"`
-			MergeCommitSha            interface{} `json:"merge_commit_sha"`
-			MergeError                interface{} `json:"merge_error"`
-			MergeParams               interface{} `json:"-"`
-			MergeStatus               string      `json:"merge_status"`
-			MergeUserID               interface{} `json:"merge_user_id"`
-			MergeWhenPipelineSucceeds bool        `json:"merge_when_pipeline_succeeds"`
-			MilestoneID               interface{} `json:"milestone_id"`
-			SourceBranch              string      `json:"source_branch"`
-			SourceProjectID           int         `json:"source_project_id"`
-			State                     string      `json:"state"`
-			TargetBranch              string      `json:"target_branch"`
-			TargetProjectID           int         `json:"target_project_id"`
-			TimeEstimate              int         `json:"time_estimate"`
-			Title                     string      `json:"title"`
-			UpdatedAt                 string      `json:"updated_at"`
-			UpdatedByID               interface{} `json:"updated_by_id"`
-			URL                       string      `json:"url"`
-			Source                    struct {
+			AssigneeID                 interface{} `json:"assignee_id"`
+			AuthorID                   int         `json:"author_id"`
+			CreatedAt                  string      `json:"created_at"`
+			DeletedAt                  interface{} `json:"deleted_at"`
+			Description                string      `json:"description"`
+			HeadPipelineID             interface{} `json:"head_pipeline_id"`
+			ID                         int         `json:"id"`
+			Iid                        int         `json:"iid"`
+			LastEditedAt               interface{} `json:"last_edited_at"`
+			LastEditedByID             interface{} `json:"last_edited_by_id"`
+			MergeCommitSha             interface{} `json:"merge_commit_sha"`
+			MergeError                 interface{} `json:"merge_error"`
+			MergeParams                interface{} `json:"-"`
+			MergeStatus                string      `json:"merge_status"`
+			MergeUserID                interface{} `json:"merge_user_id"`
+			MergeWhenPipelineSucceeds  bool        `json:"merge_when_pipeline_succeeds"`
+			MilestoneID                interface{} `json:"milestone_id"`
+			SourceBranch               string      `json:"source_branch"`
+			SourceProjectID            int         `json:"source_project_id"`
+			StateID                    int         `json:"state_id"`
+			State                      string      `json:"state"`
+			TargetBranch               string      `json:"target_branch"`
+			TargetProjectID            int         `json:"target_project_id"`
+			TimeEstimate               int         `json:"time_estimate"`
+			Title                      string      `json:"title"`
+			UpdatedAt                  string      `json:"updated_at"`
+			UpdatedByID                interface{} `json:"updated_by_id"`
+			URL                        string      `json:"url"`
+			WorkInProgress             bool        `json:"work_in_progress"`
+			TimeChange                 int         `json:"time_change"`
+			HumanTimeChange            int         `json:"human_time_change"`
+			TotalTimeSpent             int         `json:"total_time_spent"`
+			HumanTotalTimeSpent        interface{} `json:"human_total_time_spent"`
+			HumanTimeEstimate          interface{} `json:"human_time_estimate"`
+			Action                     string      `json:"action"`
+			AssigneeIDs                interface{} `json:"assignee_ids"`
+			BlockingDiscussionResolved bool        `json:"blocking_discussions_resolved"`
+			Source                     struct {
 				ID                int         `json:"id"`
 				Name              string      `json:"name"`
 				Description       string      `json:"description"`
@@ -515,10 +682,18 @@ type (
 					Email string `json:"email"`
 				} `json:"author"`
 			} `json:"last_commit"`
-			WorkInProgress      bool        `json:"work_in_progress"`
-			TotalTimeSpent      int         `json:"total_time_spent"`
-			HumanTotalTimeSpent interface{} `json:"human_total_time_spent"`
-			HumanTimeEstimate   interface{} `json:"human_time_estimate"`
+			Labels []struct {
+				ID          int         `json:"id"`
+				Title       string      `json:"title"`
+				Color       string      `json:"color"`
+				ProjectID   int         `json:"project_id"`
+				CreatedAt   string      `json:"created_at"`
+				UpdatedAt   string      `json:"updated_at"`
+				Template    bool        `json:"template"`
+				Description string      `json:"description"`
+				Type        string      `json:"type"`
+				GroupID     interface{} `json:"group_id"`
+			} `json:"labels"`
 		} `json:"merge_request"`
 	}
 
@@ -778,6 +953,10 @@ type (
 		} `json:"object_attributes"`
 		Labels  []interface{} `json:"labels"`
 		Changes struct {
+			Draft struct {
+				Previous null.Bool `json:"previous"`
+				Current  null.Bool `json:"current"`
+			} `json:"draft"`
 		} `json:"changes"`
 		Repository struct {
 			Name        string `json:"name"`
@@ -785,5 +964,132 @@ type (
 			Description string `json:"description"`
 			Homepage    string `json:"homepage"`
 		} `json:"repository"`
+	}
+
+	pipelineHook struct {
+		ObjectKind       string `json:"object_kind"`
+		ObjectAttributes struct {
+			ID         int        `json:"id"`
+			IID        int        `json:"iid"`
+			Name       string     `json:"name"`
+			Ref        string     `json:"ref"`
+			Tag        bool       `json:"tag"`
+			SHA        string     `json:"sha"`
+			BeforeSHA  string     `json:"before_sha"`
+			Source     string     `json:"source"`
+			Status     string     `json:"status"`
+			Stages     []string   `json:"stages"`
+			CreatedAt  string     `json:"created_at"`
+			FinishedAt string     `json:"finished_at"`
+			Duration   int        `json:"duration"`
+			Variables  []variable `json:"variables"`
+			URL        string     `json:"url"`
+		} `json:"object_attributes"`
+		MergeRequest struct {
+			ID                  int    `json:"id"`
+			IID                 int    `json:"iid"`
+			Title               string `json:"title"`
+			SourceBranch        string `json:"source_branch"`
+			SourceProjectID     int    `json:"source_project_id"`
+			TargetBranch        string `json:"target_branch"`
+			TargetProjectID     int    `json:"target_project_id"`
+			State               string `json:"state"`
+			MergeStatus         string `json:"merge_status"`
+			DetailedMergeStatus string `json:"detailed_merge_status"`
+			URL                 string `json:"url"`
+		} `json:"merge_request"`
+		User struct {
+			ID        int    `json:"id"`
+			Name      string `json:"name"`
+			Username  string `json:"username"`
+			AvatarURL string `json:"avatar_url"`
+			Email     string `json:"email"`
+		} `json:"user"`
+		Project struct {
+			ID                int         `json:"id"`
+			Name              string      `json:"name"`
+			Description       string      `json:"description"`
+			WebURL            string      `json:"web_url"`
+			AvatarURL         null.String `json:"avatar_url"`
+			GitSSHURL         string      `json:"git_ssh_url"`
+			GitHTTPURL        string      `json:"git_http_url"`
+			Namespace         string      `json:"namespace"`
+			VisibilityLevel   int         `json:"visibility_level"`
+			PathWithNamespace string      `json:"path_with_namespace"`
+			DefaultBranch     string      `json:"default_branch"`
+		} `json:"project"`
+		Commit struct {
+			ID        string `json:"id"`
+			Message   string `json:"message"`
+			Timestamp string `json:"timestamp"`
+			URL       string `json:"url"`
+			Author    author `json:"author"`
+		} `json:"commit"`
+		SourcePipeline struct {
+			Project struct {
+				ID                int    `json:"id"`
+				WebURL            string `json:"web_url"`
+				PathWithNamespace string `json:"path_with_namespace"`
+			} `json:"project"`
+			PipelineID int `json:"pipeline_id"`
+			JobID      int `json:"job_id"`
+		} `json:"source_pipeline"`
+		Builds []build `json:"builds"`
+	}
+
+	variable struct {
+		Key   string `json:"key"`
+		Value string `json:"value"`
+	}
+
+	author struct {
+		Name  string `json:"name"`
+		Email string `json:"email"`
+	}
+
+	build struct {
+		ID             int         `json:"id"`
+		Stage          string      `json:"stage"`
+		Name           string      `json:"name"`
+		Status         string      `json:"status"`
+		CreatedAt      string      `json:"created_at"`
+		StartedAt      null.String `json:"started_at"`
+		FinishedAt     null.String `json:"finished_at"`
+		Duration       float64     `json:"duration"`
+		QueuedDuration float64     `json:"queued_duration"`
+		FailureReason  null.String `json:"failure_reason"`
+		When           string      `json:"when"`
+		Manual         bool        `json:"manual"`
+		AllowFailure   bool        `json:"allow_failure"`
+		User           struct {
+			ID        int    `json:"id"`
+			Name      string `json:"name"`
+			Username  string `json:"username"`
+			AvatarURL string `json:"avatar_url"`
+			Email     string `json:"email"`
+		} `json:"user"`
+		Runner        runner      `json:"runner"`
+		ArtifactsFile artifacts   `json:"artifacts_file"`
+		Environment   environment `json:"environment"`
+	}
+
+	runner struct {
+		ID          int      `json:"id"`
+		Description string   `json:"description"`
+		Active      bool     `json:"active"`
+		RunnerType  string   `json:"runner_type"`
+		IsShared    bool     `json:"is_shared"`
+		Tags        []string `json:"tags"`
+	}
+
+	artifacts struct {
+		Filename null.String `json:"filename"`
+		Size     null.Int    `json:"size"`
+	}
+
+	environment struct {
+		Name           string `json:"name"`
+		Action         string `json:"action"`
+		DeploymentTier string `json:"deployment_tier"`
 	}
 )

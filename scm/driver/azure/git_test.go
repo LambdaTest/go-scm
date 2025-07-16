@@ -53,7 +53,7 @@ func TestGitCreateBranch(t *testing.T) {
 		Type("application/json").
 		File("testdata/branch_create.json")
 
-	params := &scm.CreateBranch{
+	params := &scm.ReferenceInput{
 		Name: "test_branch",
 		Sha:  "312797ba52425353dec56871a255e2a36fc96344",
 	}
@@ -123,6 +123,32 @@ func TestGitListBranches(t *testing.T) {
 	}
 }
 
+func TestGitListBranchesV2(t *testing.T) {
+	defer gock.Off()
+
+	gock.New("https:/dev.azure.com/").
+		Get("/ORG/PROJ/_apis/git/repositories/REPOID/").
+		Reply(200).
+		Type("application/json").
+		File("testdata/branches_filter.json")
+
+	client := NewDefault("ORG", "PROJ")
+	got, _, err := client.Git.ListBranchesV2(context.Background(), "REPOID", scm.BranchListOptions{SearchTerm: "main"})
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	want := []*scm.Reference{}
+	raw, _ := ioutil.ReadFile("testdata/branches_filter.json.golden")
+	_ = json.Unmarshal(raw, &want)
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("Unexpected Results")
+		t.Log(diff)
+	}
+}
+
 func TestGitCompareChanges(t *testing.T) {
 	defer gock.Off()
 
@@ -148,4 +174,63 @@ func TestGitCompareChanges(t *testing.T) {
 		t.Log(diff)
 	}
 
+}
+
+func TestGitListTags(t *testing.T) {
+	defer gock.Off()
+
+	gock.New("https:/dev.azure.com/").
+		Get("/ORG/PROJ/_apis/git/repositories/REPOID/").
+		Reply(200).
+		Type("application/json").
+		File("testdata/tags.json")
+
+	client := NewDefault("ORG", "PROJ")
+	got, _, err := client.Git.ListTags(context.Background(), "REPOID", scm.ListOptions{})
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	want := []*scm.Reference{}
+	raw, _ := ioutil.ReadFile("testdata/tags.json.golden")
+	_ = json.Unmarshal(raw, &want)
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("Unexpected Results")
+		t.Log(diff)
+	}
+}
+
+func TestConvertTags(t *testing.T) {
+	from := []*tag{
+		{
+			Name:     "refs/tags/v1.0.0",
+			ObjectID: "23d9c1d0d6c41f1c8e08ab98a6a79c2d5ada649d",
+		},
+		{
+			Name:     "refs/tags/v1.1.0",
+			ObjectID: "8a9db19b5e19613c18e9059d7b9fa5d6d6a3785f",
+		},
+	}
+
+	got := convertTags(from)
+
+	want := []*scm.Reference{
+		{
+			Name: "v1.0.0",
+			Path: "refs/tags/v1.0.0",
+			Sha:  "23d9c1d0d6c41f1c8e08ab98a6a79c2d5ada649d",
+		},
+		{
+			Name: "v1.1.0",
+			Path: "refs/tags/v1.1.0",
+			Sha:  "8a9db19b5e19613c18e9059d7b9fa5d6d6a3785f",
+		},
+	}
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("Unexpected Results")
+		t.Log(diff)
+	}
 }

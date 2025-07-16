@@ -19,7 +19,7 @@ type gitService struct {
 	client *wrapper
 }
 
-func (s *gitService) CreateBranch(ctx context.Context, repo string, params *scm.CreateBranch) (*scm.Response, error) {
+func (s *gitService) CreateBranch(ctx context.Context, repo string, params *scm.ReferenceInput) (*scm.Response, error) {
 	namespace, repoName := scm.Split(repo)
 	path := fmt.Sprintf("rest/api/1.0/projects/%s/repos/%s/branches", namespace, repoName)
 	in := &createBranch{
@@ -79,13 +79,22 @@ func (s *gitService) ListBranches(ctx context.Context, repo string, opts scm.Lis
 	return convertBranchList(out), res, err
 }
 
+func (s *gitService) ListBranchesV2(ctx context.Context, repo string, opts scm.BranchListOptions) ([]*scm.Reference, *scm.Response, error) {
+	namespace, name := scm.Split(repo)
+	path := fmt.Sprintf("rest/api/1.0/projects/%s/repos/%s/branches?%s", namespace, name, encodeBranchListOptions(opts))
+	out := new(branches)
+	res, err := s.client.do(ctx, "GET", path, nil, out)
+	copyPagination(out.pagination, res)
+	return convertBranchList(out), res, err
+}
+
 func (s *gitService) ListCommits(ctx context.Context, repo string, opts scm.CommitListOptions) ([]*scm.Commit, *scm.Response, error) {
 	namespace, name := scm.Split(repo)
 	var requestPath string
 	if opts.Path != "" {
-		requestPath = fmt.Sprintf("rest/api/1.0/projects/%s/repos/%s/commits?path=%s", namespace, name, opts.Path)
+		requestPath = fmt.Sprintf("rest/api/1.0/projects/%s/repos/%s/commits?until=%s&path=%s", namespace, name, opts.Ref, opts.Path)
 	} else {
-		requestPath = fmt.Sprintf("rest/api/1.0/projects/%s/repos/%s/commits", namespace, name)
+		requestPath = fmt.Sprintf("rest/api/1.0/projects/%s/repos/%s/commits?until=%s", namespace, name, opts.Ref)
 	}
 	out := new(commits)
 	res, err := s.client.do(ctx, "GET", requestPath, nil, out)

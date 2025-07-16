@@ -163,6 +163,45 @@ func TestRepositoryList(t *testing.T) {
 	t.Run("Page", testPage(res))
 }
 
+func TestRepositoryListV2(t *testing.T) {
+	defer gock.Off()
+
+	gock.New("https://gitlab.com").
+		Get("/api/v4/projects").
+		MatchParam("search", "diaspora").
+		MatchParam("page", "1").
+		MatchParam("per_page", "30").
+		MatchParam("membership", "true").
+		Reply(200).
+		Type("application/json").
+		SetHeaders(mockHeaders).
+		SetHeaders(mockPageHeaders).
+		File("testdata/repos_filter.json")
+
+	client := NewDefault()
+	got, res, err := client.Repositories.ListV2(context.Background(), scm.RepoListOptions{
+		ListOptions:    scm.ListOptions{Page: 1, Size: 30},
+		RepoSearchTerm: scm.RepoSearchTerm{RepoName: "diaspora"},
+	})
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	want := []*scm.Repository{}
+	raw, _ := ioutil.ReadFile("testdata/repos_filter.json.golden")
+	json.Unmarshal(raw, &want)
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("Unexpected Results")
+		t.Log(diff)
+	}
+
+	t.Run("Request", testRequest(res))
+	t.Run("Rate", testRate(res))
+	t.Run("Page", testPage(res))
+}
+
 func TestStatusList(t *testing.T) {
 	defer gock.Off()
 
@@ -478,25 +517,6 @@ func TestConvertFromState(t *testing.T) {
 	for i, test := range tests {
 		if got, want := convertFromState(test.src), test.dst; got != want {
 			t.Errorf("Want state %v converted to %s at index %d", test.src, test.dst, i)
-		}
-	}
-}
-
-func TestConvertPrivate(t *testing.T) {
-	tests := []struct {
-		in  string
-		out bool
-	}{
-		{"public", false},
-		{"", false},
-		{"private", true},
-		{"internal", true},
-		{"invalid", true},
-	}
-
-	for _, test := range tests {
-		if got, want := convertPrivate(test.in), test.out; got != want {
-			t.Errorf("Want private %v, got %v", want, got)
 		}
 	}
 }

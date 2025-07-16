@@ -16,7 +16,7 @@ type gitService struct {
 	client *wrapper
 }
 
-func (s *gitService) CreateBranch(ctx context.Context, repo string, params *scm.CreateBranch) (*scm.Response, error) {
+func (s *gitService) CreateBranch(ctx context.Context, repo string, params *scm.ReferenceInput) (*scm.Response, error) {
 	path := fmt.Sprintf("repos/%s/git/refs", repo)
 	in := &createBranch{
 		Ref: scm.ExpandRef(params.Name, "refs/heads"),
@@ -53,6 +53,12 @@ func (s *gitService) ListBranches(ctx context.Context, repo string, opts scm.Lis
 	return convertBranchList(out), res, err
 }
 
+func (s *gitService) ListBranchesV2(ctx context.Context, repo string, opts scm.BranchListOptions) ([]*scm.Reference, *scm.Response, error) {
+	// Github doesnt provide support listing based on searchTerm
+	// Hence calling the ListBranches
+	return s.ListBranches(ctx, repo, opts.PageListOptions)
+}
+
 func (s *gitService) ListCommits(ctx context.Context, repo string, opts scm.CommitListOptions) ([]*scm.Commit, *scm.Response, error) {
 	path := fmt.Sprintf("repos/%s/commits?%s", repo, encodeCommitListOptions(opts))
 	out := []*commit{}
@@ -61,10 +67,10 @@ func (s *gitService) ListCommits(ctx context.Context, repo string, opts scm.Comm
 }
 
 func (s *gitService) ListTags(ctx context.Context, repo string, opts scm.ListOptions) ([]*scm.Reference, *scm.Response, error) {
-	path := fmt.Sprintf("repos/%s/tags?%s", repo, encodeListOptions(opts))
-	out := []*branch{}
+	path := fmt.Sprintf("repos/%s/git/refs/tags?%s", repo, encodeListOptions(opts))
+	out := []*ref{}
 	res, err := s.client.do(ctx, "GET", path, nil, &out)
-	return convertTagList(out), res, err
+	return convertRefList(out), res, err
 }
 
 func (s *gitService) ListChanges(ctx context.Context, repo, ref string, _ scm.ListOptions) ([]*scm.Change, *scm.Response, error) {
@@ -185,10 +191,10 @@ func convertRef(from *ref) *scm.Reference {
 	}
 }
 
-func convertTagList(from []*branch) []*scm.Reference {
+func convertRefList(from []*ref) []*scm.Reference {
 	to := []*scm.Reference{}
 	for _, v := range from {
-		to = append(to, convertTag(v))
+		to = append(to, convertRef(v))
 	}
 	return to
 }

@@ -11,6 +11,8 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"regexp"
+	"strconv"
 	"time"
 
 	"github.com/drone/go-scm/scm"
@@ -53,6 +55,25 @@ func (s *webhookService) Parse(req *http.Request, fn scm.SecretFunc) (scm.Webhoo
 		if hook != nil {
 			hook.(*scm.PullRequestHook).Action = scm.ActionClose
 		}
+	case "pullrequest:comment_created":
+		hook, err = s.parsePullRequestCommentHook(data)
+		if hook != nil {
+			hook.(*scm.IssueCommentHook).Action = scm.ActionCreate
+		}
+	case "pullrequest:comment_updated":
+		// Bitbucket PR Comment Update is unreliable and does not send events
+		// most of the time https://github.com/iterative/cml/issues/817
+		hook, err = s.parsePullRequestCommentHook(data)
+		if hook != nil {
+			hook.(*scm.IssueCommentHook).Action = scm.ActionEdit
+		}
+	case "pullrequest:comment_deleted":
+		hook, err = s.parsePullRequestCommentHook(data)
+		if hook != nil {
+			hook.(*scm.IssueCommentHook).Action = scm.ActionDelete
+		}
+	case "repo:commit_status_updated", "repo:commit_status_created":
+		hook, err = s.parsePipelineHook(data)
 	}
 	if err != nil {
 		return nil, err
@@ -76,6 +97,12 @@ func (s *webhookService) Parse(req *http.Request, fn scm.SecretFunc) (scm.Webhoo
 	}
 
 	return hook, nil
+}
+
+func (s *webhookService) parsePullRequestCommentHook(data []byte) (scm.Webhook, error) {
+	dst := new(prCommentHook)
+	err := json.Unmarshal(data, dst)
+	return convertPrCommentHook(dst), err
 }
 
 func (s *webhookService) parsePushHook(data []byte) (scm.Webhook, error) {
@@ -113,6 +140,15 @@ func (s *webhookService) parsePullRequestHook(data []byte) (*scm.PullRequestHook
 	default:
 		return convertPullRequestHook(dst), err
 	}
+}
+
+func (s *webhookService) parsePipelineHook(data []byte) (*scm.PipelineHook, error) {
+	dst := new(pipelineHook)
+	err := json.Unmarshal(data, dst)
+	if err != nil {
+		return nil, err
+	}
+	return convertBitbucketHook(dst), err
 }
 
 //
@@ -381,6 +417,278 @@ type (
 		} `json:"links"`
 		UUID string `json:"uuid"`
 	}
+
+	prCommentInput struct {
+		Content struct {
+			Raw string `json:"raw"`
+		} `json:"content"`
+	}
+
+	prComment struct {
+		Links struct {
+			Self link `json:"self"`
+			HTML link `json:"html"`
+		} `json:"links"`
+		Deleted     bool `json:"deleted"`
+		PullRequest struct {
+			Type  string `json:"type"`
+			ID    int    `json:"id"`
+			Links struct {
+				Self link `json:"self"`
+				HTML link `json:"html"`
+			} `json:"links"`
+			Title string `json:"title"`
+		}
+		Content struct {
+			Raw    string `json:"raw"`
+			Markup string `json:"markup"`
+			Html   string `json:"html"`
+			Type   string `json:"type"`
+		}
+		CreatedOn time.Time         `json:"created_on"`
+		User      prCommentHookUser `json:"user"`
+		UpdatedOn time.Time         `json:"updated_on"`
+		Type      string            `json:"type"`
+		ID        int               `json:"id"`
+	}
+
+	prCommentHookRepo struct {
+		Scm     string `json:"scm"`
+		Website string `json:"website"`
+		UUID    string `json:"uuid"`
+		Links   struct {
+			Self   link `json:"self"`
+			HTML   link `json:"html"`
+			Avatar link `json:"avatar"`
+		} `json:"links"`
+		Project struct {
+			Links struct {
+				Self   link `json:"self"`
+				HTML   link `json:"html"`
+				Avatar link `json:"avatar"`
+			} `json:"links"`
+			Type string `json:"type"`
+			Name string `json:"name"`
+			Key  string `json:"key"`
+			UUID string `json:"uuid"`
+		} `json:"project"`
+		FullName  string            `json:"full_name"`
+		Owner     prCommentHookUser `json:"owner"`
+		Workspace struct {
+			Slug  string `json:"slugg"`
+			Type  string `json:"type"`
+			Name  string `json:"name"`
+			Links struct {
+				Self   link `json:"self"`
+				HTML   link `json:"html"`
+				Avatar link `json:"avatar"`
+			} `json:"links"`
+			UUID string `json:"uuid"`
+		} `json:"workspace"`
+		Type      string `json:"type"`
+		IsPrivate bool   `json:"is_private"`
+		Name      string `json:"name"`
+	}
+
+	prCommentHookUser struct {
+		Username    string `json:"username"`
+		DisplayName string `json:"display_name"`
+		UUID        string `json:"uuid"`
+		Links       struct {
+			Self   link `json:"self"`
+			HTML   link `json:"html"`
+			Avatar link `json:"avatar"`
+		} `json:"links"`
+		Type      string `json:"type"`
+		Nickname  string `json:"nickname"`
+		AccountID string `json:"account_id"`
+	}
+
+	prCommentHookPullRequest struct {
+		Rendered struct {
+			Description struct {
+				Raw    string `json:"raw"`
+				Markup string `json:"markup"`
+				Html   string `json:"html"`
+				Type   string `json:"type"`
+			} `json:"description"`
+			Title struct {
+				Raw    string `json:"raw"`
+				Markup string `json:"markup"`
+				Html   string `json:"html"`
+				Type   string `json:"type"`
+			} `json:"title"`
+		} `json:"rendered"`
+		Type        string `json:"type"`
+		Description string `json:"description"`
+		Links       struct {
+			Decline        link `json:"decline"`
+			Diffstat       link `json:"diffstat"`
+			Commits        link `json:"commits"`
+			Self           link `json:"self"`
+			Comments       link `json:"comments"`
+			Merge          link `json:"merge"`
+			Html           link `json:"html"`
+			Activity       link `json:"activity"`
+			RequestChanges link `json:"request-changes"`
+			Diff           link `json:"diff"`
+			Approve        link `json:"approve"`
+			Statuses       link `json:"statuses"`
+		} `json:"links"`
+		Title             string        `json:"title"`
+		CloseSourceBranch bool          `json:"close_source_branch"`
+		Reviewers         []interface{} `json:"reviewers"`
+		ID                int           `json:"id"`
+		Destination       struct {
+			Commit struct {
+				Hash  string `json:"hash"`
+				Type  string `json:"type"`
+				Links struct {
+					Self link `json:"self"`
+					HTML link `json:"html"`
+				} `json:"links"`
+			}
+			Repository struct {
+				Links struct {
+					Self   link `json:"self"`
+					HTML   link `json:"html"`
+					Avatar link `json:"avatar"`
+				} `json:"links"`
+				Type     string `json:"type"`
+				Name     string `json:"name"`
+				FullName string `json:"full_name"`
+				UUID     string `json:"uuid"`
+			} `json:"repository"`
+			Branch struct {
+				Name string `json:"name"`
+			} `json:"branch"`
+		} `json:"destination"`
+		CreatedOn time.Time `json:"created_on"`
+		Summary   struct {
+			Raw    string `json:"raw"`
+			Markup string `json:"markup"`
+			Html   string `json:"html"`
+			Type   string `json:"type"`
+		} `json:"summary"`
+		Source struct {
+			Commit struct {
+				Hash  string `json:"hash"`
+				Type  string `json:"type"`
+				Links struct {
+					Self link `json:"self"`
+					HTML link `json:"html"`
+				} `json:"links"`
+			}
+			Repository struct {
+				Links struct {
+					Self   link `json:"self"`
+					HTML   link `json:"html"`
+					Avatar link `json:"avatar"`
+				} `json:"links"`
+				Type     string `json:"type"`
+				Name     string `json:"name"`
+				FullName string `json:"full_name"`
+				UUID     string `json:"uuid"`
+			} `json:"repository"`
+			Branch struct {
+				Name string `json:"name"`
+			} `json:"branch"`
+		} `json:"source"`
+		CommentCount int               `json:"comment_count"`
+		State        string            `json:"state"`
+		TaskCount    int               `json:"task_count"`
+		Participants []interface{}     `json:"participants"`
+		Reason       string            `json:"reason"`
+		UpdatedOn    time.Time         `json:"updated_on"`
+		Author       prCommentHookUser `json:"author"`
+		MergeCommit  interface{}       `json:"merge_commit"`
+		ClosedBy     interface{}       `json:"closed_by"`
+	}
+
+	prCommentHook struct {
+		Comment     prComment                `json:"comment"`
+		PullRequest prCommentHookPullRequest `json:"pullRequest"`
+		Repository  prCommentHookRepo        `json:"repository"`
+		Actor       prCommentHookUser        `json:"actor"`
+	}
+
+	pipelineHook struct {
+		Repository   webhookRepository `json:"repository"`
+		Actor        actor             `json:"actor"`
+		CommitStatus struct {
+			Key     string `json:"key"`
+			Type    string `json:"type"`
+			State   string `json:"state"`
+			Name    string `json:"name"`
+			RefName string `json:"refname"`
+			Commit  struct {
+				Type    string    `json:"type"`
+				Hash    string    `json:"hash"`
+				Date    time.Time `json:"date"`
+				Author  author    `json:"author"`
+				Message string    `json:"message"`
+				Links   struct {
+					Self   href `json:"self"`
+					HTML   href `json:"html"`
+					Avatar href `json:"avatar"`
+				} `json:"links"`
+			} `json:"commit"`
+			URL         string    `json:"url"`
+			Repository  info      `json:"repository"`
+			Description string    `json:"description"`
+			CreatedOn   time.Time `json:"created_on"`
+			UpdatedOn   time.Time `json:"updated_on"`
+			Links       struct {
+				Self   href `json:"self"`
+				Commit href `json:"commit"`
+			} `json:"links"`
+		} `json:"commit_status"`
+	}
+
+	href struct {
+		Href string `json:"href"`
+	}
+
+	actor struct {
+		DisplayName string `json:"display_name"`
+		Links       struct {
+			Self   href `json:"self"`
+			HTML   href `json:"html"`
+			Avatar href `json:"avatar"`
+		} `json:"links"`
+		Type     string `json:"type"`
+		UUID     string `json:"uuid"`
+		Username string `json:"username"`
+	}
+
+	author struct {
+		Type string `json:"type"`
+		Raw  string `json:"raw"`
+		User struct {
+			DisplayName string `json:"display_name"`
+			Links       struct {
+				Self   href `json:"self"`
+				HTML   href `json:"html"`
+				Avatar href `json:"avatar"`
+			} `json:"links"`
+			Type      string `json:"type"`
+			UUID      string `json:"uuid"`
+			AccountID string `json:"account_id"`
+			Nickname  string `json:"nickname"`
+		} `json:"user"`
+	}
+
+	info struct {
+		Type     string `json:"type"`
+		FullName string `json:"full_name"`
+		Links    struct {
+			Self   href `json:"self"`
+			HTML   href `json:"html"`
+			Avatar href `json:"avatar"`
+		} `json:"links"`
+		Name string `json:"name"`
+		UUID string `json:"uuid"`
+	}
 )
 
 //
@@ -446,6 +754,7 @@ func convertPushHook(src *pushHook) *scm.PushHook {
 			Link:      src.Repository.Links.HTML.Href,
 		},
 		Sender: scm.User{
+			ID:     src.Actor.UUID,
 			Login:  src.Actor.Username,
 			Name:   src.Actor.DisplayName,
 			Avatar: src.Actor.Links.Avatar.Href,
@@ -478,6 +787,7 @@ func convertBranchCreateHook(src *pushHook) *scm.BranchHook {
 			Link:      src.Repository.Links.HTML.Href,
 		},
 		Sender: scm.User{
+			ID:     src.Actor.UUID,
 			Login:  src.Actor.Username,
 			Name:   src.Actor.DisplayName,
 			Avatar: src.Actor.Links.Avatar.Href,
@@ -505,6 +815,7 @@ func convertBranchDeleteHook(src *pushHook) *scm.BranchHook {
 			Link:      src.Repository.Links.HTML.Href,
 		},
 		Sender: scm.User{
+			ID:     src.Actor.UUID,
 			Login:  src.Actor.Username,
 			Name:   src.Actor.DisplayName,
 			Avatar: src.Actor.Links.Avatar.Href,
@@ -532,6 +843,7 @@ func convertTagCreateHook(src *pushHook) *scm.TagHook {
 			Link:      src.Repository.Links.HTML.Href,
 		},
 		Sender: scm.User{
+			ID:     src.Actor.UUID,
 			Login:  src.Actor.Username,
 			Name:   src.Actor.DisplayName,
 			Avatar: src.Actor.Links.Avatar.Href,
@@ -559,6 +871,7 @@ func convertTagDeleteHook(src *pushHook) *scm.TagHook {
 			Link:      src.Repository.Links.HTML.Href,
 		},
 		Sender: scm.User{
+			ID:     src.Actor.UUID,
 			Login:  src.Actor.Username,
 			Name:   src.Actor.DisplayName,
 			Avatar: src.Actor.Links.Avatar.Href,
@@ -579,6 +892,7 @@ func convertPullRequestHook(src *webhook) *scm.PullRequestHook {
 			Title:  src.PullRequest.Title,
 			Body:   src.PullRequest.Description,
 			Sha:    src.PullRequest.Source.Commit.Hash,
+			Merge:  src.PullRequest.MergeCommit.Hash,
 			Ref:    fmt.Sprintf("refs/pull-requests/%d/from", src.PullRequest.ID),
 			Source: src.PullRequest.Source.Branch.Name,
 			Target: src.PullRequest.Destination.Branch.Name,
@@ -604,9 +918,136 @@ func convertPullRequestHook(src *webhook) *scm.PullRequestHook {
 			Link:      src.Repository.Links.HTML.Href,
 		},
 		Sender: scm.User{
+			ID:     src.Actor.UUID,
 			Login:  src.Actor.Username,
 			Name:   src.Actor.DisplayName,
 			Avatar: src.Actor.Links.Avatar.Href,
 		},
 	}
+}
+
+func convertPrCommentHook(src *prCommentHook) *scm.IssueCommentHook {
+	namespace, _ := scm.Split(src.Repository.FullName)
+	dst := scm.IssueCommentHook{
+		Repo: scm.Repository{
+			ID:        src.Repository.UUID,
+			Namespace: namespace,
+			Name:      src.Repository.Name,
+			Clone:     fmt.Sprintf("https://bitbucket.org/%s.git", src.Repository.FullName),
+			CloneSSH:  fmt.Sprintf("git@bitbucket.org:%s.git", src.Repository.FullName),
+			Link:      src.Repository.Links.HTML.Href,
+			Private:   src.Repository.IsPrivate,
+		},
+		Issue: scm.Issue{
+			Number: src.PullRequest.ID,
+			Title:  src.PullRequest.Title,
+			Body:   src.PullRequest.Description,
+			Link:   src.PullRequest.Links.Html.Href,
+			Author: scm.User{
+				Login:  src.PullRequest.Author.Username,
+				Name:   src.PullRequest.Author.DisplayName,
+				Avatar: src.PullRequest.Author.Links.Avatar.Href,
+			},
+			PullRequest: scm.PullRequest{
+				Number: src.PullRequest.ID,
+				Title:  src.PullRequest.Title,
+				Body:   src.PullRequest.Description,
+				Sha:    src.PullRequest.Source.Commit.Hash,
+				// Bitbucket does not support PR Refs: https://jira.atlassian.com/browse/BCLOUD-5814
+				Ref:    fmt.Sprintf("refs/pull-requests/%d/from", src.PullRequest.ID),
+				Source: src.PullRequest.Source.Branch.Name,
+				Target: src.PullRequest.Destination.Branch.Name,
+				Fork:   src.PullRequest.Source.Repository.FullName,
+				Link:   src.PullRequest.Links.Html.Href,
+				Closed: src.PullRequest.State != "OPEN",
+				Merged: src.PullRequest.State == "MERGED",
+				Author: scm.User{
+					Login:  src.PullRequest.Author.Username,
+					Name:   src.PullRequest.Author.DisplayName,
+					Avatar: src.PullRequest.Author.Links.Avatar.Href,
+				},
+				Created: src.PullRequest.CreatedOn,
+				Updated: src.PullRequest.UpdatedOn,
+			},
+			Created: src.PullRequest.CreatedOn,
+			Updated: src.PullRequest.UpdatedOn,
+		},
+		Comment: scm.Comment{
+			ID:   src.Comment.ID,
+			Body: src.Comment.Content.Raw,
+			Author: scm.User{
+				ID:     src.Comment.User.UUID,
+				Login:  src.Comment.User.Username,
+				Name:   src.Comment.User.DisplayName,
+				Avatar: src.Comment.User.Links.Avatar.Href,
+			},
+			Created: src.Comment.CreatedOn,
+			Updated: src.Comment.UpdatedOn,
+		},
+		Sender: scm.User{
+			ID:     src.Actor.UUID,
+			Login:  src.Actor.Username,
+			Name:   src.Actor.DisplayName,
+			Avatar: src.Actor.Links.Avatar.Href,
+		},
+	}
+	return &dst
+}
+
+func convertBitbucketHook(src *pipelineHook) *scm.PipelineHook {
+	if src.CommitStatus.Type == "" || src.CommitStatus.Type != "build" {
+		return nil
+	}
+	namespace, name := scm.Split(src.Repository.FullName)
+
+	return &scm.PipelineHook{
+		Repo: scm.Repository{
+			ID:        src.Repository.UUID,
+			Namespace: namespace,
+			Name:      name,
+			Clone:     src.Repository.Links.HTML.Href, // Assuming HTML link as Clone URL
+			Branch:    src.CommitStatus.RefName,
+			Private:   src.Repository.IsPrivate,
+		},
+		Commit: scm.Commit{
+			Sha:     src.CommitStatus.Commit.Hash,
+			Message: src.CommitStatus.Commit.Message,
+			Author: scm.Signature{
+				Name:   src.CommitStatus.Commit.Author.User.DisplayName,
+				Email:  extractEmail(src.CommitStatus.Commit.Author.Raw),
+				Avatar: src.CommitStatus.Commit.Author.User.Links.Avatar.Href,
+			},
+			Committer: scm.Signature{
+				Name:   src.CommitStatus.Commit.Author.User.DisplayName,
+				Email:  extractEmail(src.CommitStatus.Commit.Author.Raw),
+				Avatar: src.CommitStatus.Commit.Author.User.Links.Avatar.Href,
+			},
+			Link: src.CommitStatus.Commit.Links.HTML.Href,
+		},
+		Execution: scm.Execution{
+			Number:  extractExecutionId(src.CommitStatus.URL),
+			Status:  scm.ConvertExecutionStatus(src.CommitStatus.State),
+			Created: src.CommitStatus.CreatedOn,
+			URL:     src.CommitStatus.URL,
+		},
+		Sender: scm.User{
+			Login:  src.Actor.Username,
+			Name:   src.Actor.DisplayName,
+			Avatar: src.Actor.Links.Avatar.Href,
+			ID:     src.Actor.UUID,
+		},
+		PullRequest: scm.PullRequest{},
+	}
+}
+
+func extractExecutionId(url string) int {
+	re := regexp.MustCompile(`/results/(\d+)`)
+	match := re.FindStringSubmatch(url)
+	if len(match) > 1 {
+		id, err := strconv.Atoi(match[1])
+		if err == nil {
+			return id
+		}
+	}
+	return -1
 }

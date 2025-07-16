@@ -69,7 +69,8 @@ func (c *wrapper) do(ctx context.Context, method, path string, in, out interface
 		Method: method,
 		Path:   path,
 		Header: map[string][]string{
-			"Accept": {"application/json"},
+			"Accept":            {"application/json"},
+			"x-atlassian-token": {"no-check"},
 		},
 	}
 	// if we are posting or putting data, we need to
@@ -94,7 +95,8 @@ func (c *wrapper) do(ctx context.Context, method, path string, in, out interface
 			req.Body = &b
 			// write the content type that contains the length of the multipart
 			req.Header = map[string][]string{
-				"Content-Type": {mw.FormDataContentType()},
+				"Content-Type":      {mw.FormDataContentType()},
+				"x-atlassian-token": {"no-check"},
 			}
 		default:
 			buf := new(bytes.Buffer)
