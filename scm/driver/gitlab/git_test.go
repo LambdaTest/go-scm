@@ -90,7 +90,7 @@ func TestGitCreateBranch(t *testing.T) {
 		SetHeaders(mockHeaders).
 		File("testdata/branch_create.json")
 
-	params := &scm.CreateBranch{
+	params := &scm.ReferenceInput{
 		Name: "yooo",
 		Sha:  "0efb1bed7c6a4871cb4ddb862ecc2111e11f31ee",
 	}
@@ -194,6 +194,38 @@ func TestGitListBranches(t *testing.T) {
 
 	want := []*scm.Reference{}
 	raw, _ := ioutil.ReadFile("testdata/branches.json.golden")
+	json.Unmarshal(raw, &want)
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("Unexpected Results")
+		t.Log(diff)
+	}
+
+	t.Run("Request", testRequest(res))
+	t.Run("Rate", testRate(res))
+	t.Run("Page", testPage(res))
+}
+
+func TestGitListBranchesWithBranchFilter(t *testing.T) {
+	defer gock.Off()
+
+	gock.New("https://gitlab.com").
+		Get("/api/v4/projects/diaspora/diaspora/repository/branches").
+		Reply(200).
+		Type("application/json").
+		SetHeaders(mockHeaders).
+		SetHeaders(mockPageHeaders).
+		File("testdata/branches_filter.json")
+
+	client := NewDefault()
+	got, res, err := client.Git.ListBranchesV2(context.Background(), "diaspora/diaspora", scm.BranchListOptions{SearchTerm: "mast"})
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	want := []*scm.Reference{}
+	raw, _ := ioutil.ReadFile("testdata/branches_filter.json.golden")
 	json.Unmarshal(raw, &want)
 
 	if diff := cmp.Diff(got, want); diff != "" {

@@ -16,11 +16,11 @@ type gitService struct {
 	client *wrapper
 }
 
-func (s *gitService) CreateBranch(ctx context.Context, repo string, params *scm.CreateBranch) (*scm.Response, error) {
+func (s *gitService) CreateBranch(ctx context.Context, repo string, params *scm.ReferenceInput) (*scm.Response, error) {
 	// https://docs.microsoft.com/en-us/rest/api/azure/devops/git/refs/update-refs?view=azure-devops-rest-6.0
 	if s.client.project == "" {
-    	return nil, ProjectRequiredError()
-    }
+		return nil, ProjectRequiredError()
+	}
 	endpoint := fmt.Sprintf("%s/%s/_apis/git/repositories/%s/refs?api-version=6.0", s.client.owner, s.client.project, repo)
 
 	in := make(crudBranch, 1)
@@ -32,16 +32,16 @@ func (s *gitService) CreateBranch(ctx context.Context, repo string, params *scm.
 
 func (s *gitService) FindBranch(ctx context.Context, repo, name string) (*scm.Reference, *scm.Response, error) {
 	if s.client.project == "" {
-    	return nil, nil, ProjectRequiredError()
-    }
+		return nil, nil, ProjectRequiredError()
+	}
 	return nil, nil, scm.ErrNotSupported
 }
 
 func (s *gitService) FindCommit(ctx context.Context, repo, ref string) (*scm.Commit, *scm.Response, error) {
 	// https://docs.microsoft.com/en-us/rest/api/azure/devops/git/commits/get?view=azure-devops-rest-6.0#get-by-id
 	if s.client.project == "" {
-    	return nil, nil, ProjectRequiredError()
-    }
+		return nil, nil, ProjectRequiredError()
+	}
 	endpoint := fmt.Sprintf("%s/%s/_apis/git/repositories/%s/commits/%s?api-version=6.0", s.client.owner, s.client.project, repo, ref)
 	out := new(gitCommit)
 	res, err := s.client.do(ctx, "GET", endpoint, nil, out)
@@ -55,9 +55,20 @@ func (s *gitService) FindTag(ctx context.Context, repo, name string) (*scm.Refer
 func (s *gitService) ListBranches(ctx context.Context, repo string, _ scm.ListOptions) ([]*scm.Reference, *scm.Response, error) {
 	// https://docs.microsoft.com/en-us/rest/api/azure/devops/git/refs/list?view=azure-devops-rest-6.0
 	if s.client.project == "" {
-    	return nil, nil, ProjectRequiredError()
-    }
-	endpoint := fmt.Sprintf("%s/%s/_apis/git/repositories/%s/refs?api-version=6.0", s.client.owner, s.client.project, repo)
+		return nil, nil, ProjectRequiredError()
+	}
+	endpoint := fmt.Sprintf("%s/%s/_apis/git/repositories/%s/refs?includeMyBranches=true&api-version=6.0", s.client.owner, s.client.project, repo)
+	out := new(branchList)
+	res, err := s.client.do(ctx, "GET", endpoint, nil, &out)
+	return convertBranchList(out.Value), res, err
+}
+
+func (s *gitService) ListBranchesV2(ctx context.Context, repo string, opts scm.BranchListOptions) ([]*scm.Reference, *scm.Response, error) {
+	// https://docs.microsoft.com/en-us/rest/api/azure/devops/git/refs/list?view=azure-devops-rest-6.0
+	if s.client.project == "" {
+		return nil, nil, ProjectRequiredError()
+	}
+	endpoint := fmt.Sprintf("%s/%s/_apis/git/repositories/%s/refs?api-version=6.0&filterContains=%s", s.client.owner, s.client.project, repo, opts.SearchTerm)
 	out := new(branchList)
 	res, err := s.client.do(ctx, "GET", endpoint, nil, &out)
 	return convertBranchList(out.Value), res, err
@@ -66,8 +77,8 @@ func (s *gitService) ListBranches(ctx context.Context, repo string, _ scm.ListOp
 func (s *gitService) ListCommits(ctx context.Context, repo string, opts scm.CommitListOptions) ([]*scm.Commit, *scm.Response, error) {
 	// https://docs.microsoft.com/en-us/rest/api/azure/devops/git/commits/get-commits?view=azure-devops-rest-6.0
 	if s.client.project == "" {
-    	return nil, nil, ProjectRequiredError()
-    }
+		return nil, nil, ProjectRequiredError()
+	}
 	endpoint := fmt.Sprintf("%s/%s/_apis/git/repositories/%s/commits?", s.client.owner, s.client.project, repo)
 	if opts.Ref != "" {
 		endpoint += fmt.Sprintf("searchCriteria.itemVersion.version=%s&", opts.Ref)
@@ -83,7 +94,18 @@ func (s *gitService) ListCommits(ctx context.Context, repo string, opts scm.Comm
 }
 
 func (s *gitService) ListTags(ctx context.Context, repo string, opts scm.ListOptions) ([]*scm.Reference, *scm.Response, error) {
-	return nil, nil, scm.ErrNotSupported
+	if s.client.project == "" {
+		return nil, nil, ProjectRequiredError()
+	}
+	endpoint := fmt.Sprintf("%s/%s/_apis/git/repositories/%s/refs?", s.client.owner, s.client.project, repo)
+	// add tags
+	endpoint += fmt.Sprintf("filter=tags/")
+	// add target
+	endpoint += fmt.Sprintf("&api-version=7.1-preview.1")
+	out := new(tags)
+	res, err := s.client.do(ctx, "GET", endpoint, nil, &out)
+
+	return convertTags(out.Value), res, err
 }
 
 func (s *gitService) ListChanges(ctx context.Context, repo, ref string, _ scm.ListOptions) ([]*scm.Change, *scm.Response, error) {
@@ -93,8 +115,8 @@ func (s *gitService) ListChanges(ctx context.Context, repo, ref string, _ scm.Li
 func (s *gitService) CompareChanges(ctx context.Context, repo, source, target string, _ scm.ListOptions) ([]*scm.Change, *scm.Response, error) {
 	// https://docs.microsoft.com/en-us/rest/api/azure/devops/git/diffs/get?view=azure-devops-rest-6.0
 	if s.client.project == "" {
-    	return nil, nil, ProjectRequiredError()
-    }
+		return nil, nil, ProjectRequiredError()
+	}
 	endpoint := fmt.Sprintf("%s/%s/_apis/git/repositories/%s/diffs/commits?", s.client.owner, s.client.project, repo)
 	// add base
 	endpoint += fmt.Sprintf("baseVersion=%s&baseVersionType=commit&", source)
@@ -191,6 +213,29 @@ type compare struct {
 	TargetCommit string  `json:"targetCommit"`
 }
 
+type tags struct {
+	Value []*tag `json:"value"`
+	Count int    `json:"count"`
+}
+type tag struct {
+	Name     string `json:"name"`
+	ObjectID string `json:"objectId"`
+	Creator  struct {
+		DisplayName string `json:"displayName"`
+		URL         string `json:"url"`
+		Links       struct {
+			Avatar struct {
+				Href string `json:"href"`
+			} `json:"avatar"`
+		} `json:"_links"`
+		ID         string `json:"id"`
+		UniqueName string `json:"uniqueName"`
+		ImageURL   string `json:"imageUrl"`
+		Descriptor string `json:"descriptor"`
+	} `json:"creator"`
+	URL string `json:"url"`
+}
+
 func convertBranchList(from []*branch) []*scm.Reference {
 	to := []*scm.Reference{}
 	for _, v := range from {
@@ -221,11 +266,13 @@ func convertCommit(from *gitCommit) *scm.Commit {
 		Sha:     from.CommitID,
 		Link:    from.URL,
 		Author: scm.Signature{
+			Login: from.Author.Name,
 			Name:  from.Author.Name,
 			Email: from.Author.Email,
 			Date:  from.Author.Date,
 		},
 		Committer: scm.Signature{
+			Login: from.Committer.Name,
 			Name:  from.Committer.Name,
 			Email: from.Committer.Email,
 			Date:  from.Committer.Date,
@@ -255,4 +302,16 @@ func convertChange(from *file) *scm.Change {
 	}
 
 	return returnVal
+}
+
+func convertTags(from []*tag) []*scm.Reference {
+	var to []*scm.Reference
+	for _, v := range from {
+		to = append(to, &scm.Reference{
+			Name: scm.TrimRef(v.Name),
+			Path: scm.ExpandRef(v.Name, "refs/tags/"),
+			Sha:  v.ObjectID,
+		})
+	}
+	return to
 }

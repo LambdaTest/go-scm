@@ -68,6 +68,26 @@ type (
 		Reset     int64
 	}
 
+	// BranchListOptions specifies optional branch search term and pagination
+	// parameters.
+	BranchListOptions struct {
+		SearchTerm      string
+		PageListOptions ListOptions
+	}
+
+	// RepoListOptions specifies optional repo search term and pagination
+	// parameters.
+	RepoListOptions struct {
+		ListOptions
+		RepoSearchTerm
+	}
+
+	// RepoSearchTerm specifies searchable parameters.
+	RepoSearchTerm struct {
+		RepoName string
+		User     string
+	}
+
 	// ListOptions specifies optional pagination
 	// parameters.
 	ListOptions struct {

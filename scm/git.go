@@ -13,16 +13,16 @@ import (
 const EmptyCommit = "0000000000000000000000000000000000000000"
 
 type (
-	// CreateBranch provides a SHA for creating a branch.
-	CreateBranch struct {
-		Name string
-		Sha  string
-	}
-
 	// Reference represents a git reference.
 	Reference struct {
 		Name string
 		Path string
+		Sha  string
+	}
+
+	// ReferenceInput provides a SHA for creating a reference.
+	ReferenceInput struct {
+		Name string
 		Sha  string
 	}
 
@@ -59,10 +59,19 @@ type (
 		Avatar string
 	}
 
+	// Pipeline Execution details
+	Execution struct {
+		Number  int
+		Status  ExecutionStatus
+		Created time.Time
+		Updated time.Time
+		URL     string
+	}
+
 	// GitService provides access to git resources.
 	GitService interface {
 		// CreateBranch creates a git branch by name given a sha.
-		CreateBranch(ctx context.Context, repo string, params *CreateBranch) (*Response, error)
+		CreateBranch(ctx context.Context, repo string, params *ReferenceInput) (*Response, error)
 
 		// FindBranch finds a git branch by name.
 		FindBranch(ctx context.Context, repo, name string) (*Reference, *Response, error)
@@ -75,6 +84,9 @@ type (
 
 		// ListBranches returns a list of git branches.
 		ListBranches(ctx context.Context, repo string, opts ListOptions) ([]*Reference, *Response, error)
+
+		// ListBranchesV2 returns a list of git branches based on the searchTerm passed.
+		ListBranchesV2(ctx context.Context, repo string, opts BranchListOptions) ([]*Reference, *Response, error)
 
 		// ListCommits returns a list of git commits.
 		ListCommits(ctx context.Context, repo string, opts CommitListOptions) ([]*Commit, *Response, error)
@@ -91,4 +103,8 @@ type (
 		// return a 2-way or 3-way diff changeset.
 		CompareChanges(ctx context.Context, repo, source, target string, opts ListOptions) ([]*Change, *Response, error)
 	}
+
+	// CreateBranch is a type alias for upstream projects
+	// that use the previous CreateBranch type name.
+	CreateBranch = ReferenceInput
 )

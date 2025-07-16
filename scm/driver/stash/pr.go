@@ -34,7 +34,7 @@ func (s *pullService) FindComment(ctx context.Context, repo string, number int, 
 
 func (s *pullService) List(ctx context.Context, repo string, opts scm.PullRequestListOptions) ([]*scm.PullRequest, *scm.Response, error) {
 	namespace, name := scm.Split(repo)
-	path := fmt.Sprintf("rest/api/1.0/projects/%s/repos/%s/pull-requests", namespace, name)
+	path := fmt.Sprintf("rest/api/1.0/projects/%s/repos/%s/pull-requests?%s", namespace, name, encodePullRequestListOptions(opts))
 	out := new(prs)
 	res, err := s.client.do(ctx, "GET", path, nil, out)
 	if !out.pagination.LastPage.Bool {
@@ -67,7 +67,7 @@ func (s *pullService) ListComments(context.Context, string, int, scm.ListOptions
 
 func (s *pullService) ListCommits(ctx context.Context, repo string, number int, opts scm.ListOptions) ([]*scm.Commit, *scm.Response, error) {
 	namespace, name := scm.Split(repo)
-	path := fmt.Sprintf("rest/api/1.0/projects/%s/repos/%s/pull-requests/%d/commits", namespace, name, number)
+	path := fmt.Sprintf("rest/api/1.0/projects/%s/repos/%s/pull-requests/%d/commits?%s", namespace, name, number, encodeListOptionsV2(opts))
 	out := new(commits)
 	res, err := s.client.do(ctx, "GET", path, nil, out)
 	if !out.pagination.LastPage.Bool {
@@ -173,6 +173,12 @@ type pr struct {
 	Links        struct {
 		Self []link `json:"self"`
 	} `json:"links"`
+	Properties struct {
+		MergeCommit struct {
+			ID        string `json:"id"`
+			DisplayID string `json:"displayId"`
+		} `json:"mergeCommit"`
+	} `json:"properties"`
 }
 
 type prs struct {
@@ -221,6 +227,7 @@ func convertPullRequest(from *pr) *scm.PullRequest {
 		Title:   from.Title,
 		Body:    from.Description,
 		Sha:     from.FromRef.LatestCommit,
+		Merge:   from.Properties.MergeCommit.ID,
 		Ref:     fmt.Sprintf("refs/pull-requests/%d/from", from.ID),
 		Source:  from.FromRef.DisplayID,
 		Target:  from.ToRef.DisplayID,
