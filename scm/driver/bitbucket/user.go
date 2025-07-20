@@ -6,7 +6,6 @@ package bitbucket
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/drone/go-scm/scm"
@@ -30,9 +29,9 @@ func (s *userService) FindLogin(ctx context.Context, login string) (*scm.User, *
 }
 
 func (s *userService) FindEmail(ctx context.Context) (string, *scm.Response, error) {
-    out := new(emails)
-    res, err := s.client.do(ctx, "GET", "2.0/user/emails", nil, &out)
-    return convertEmailList(out), res, err
+	out := new(emails)
+	res, err := s.client.do(ctx, "GET", "2.0/user/emails", nil, &out)
+	return convertEmailList(out), res, err
 }
 
 func (s *userService) ListEmail(context.Context, scm.ListOptions) ([]*scm.Email, *scm.Response, error) {
@@ -42,7 +41,7 @@ func (s *userService) ListEmail(context.Context, scm.ListOptions) ([]*scm.Email,
 func convertEmailList(from *emails) string {
 	for _, v := range from.Values {
 		if v.IsPrimary == true {
-		return v.Email
+			return v.Email
 		}
 	}
 	return ""
@@ -66,12 +65,12 @@ type user struct {
 }
 
 type email struct {
-    Email string `json:"email"`
-    IsPrimary bool `json:"is_primary"`
+	Email     string `json:"email"`
+	IsPrimary bool   `json:"is_primary"`
 }
 
 type emails struct {
-    Values []*email `json:"values"`
+	Values []*email `json:"values"`
 }
 
 func convertUser(from *user) *scm.User {

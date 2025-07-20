@@ -108,6 +108,13 @@ func (s *repositoryService) CreateHook(ctx context.Context, repo string, input *
 	return convertHook(out), res, err
 }
 
+func (s *repositoryService) List2(ctx context.Context, orgSlug string, opts scm.ListOptions) ([]*scm.Repository, *scm.Response, error) {
+	return nil, nil, scm.ErrNotSupported
+}
+func (s *repositoryService) ListRepoLanguages(context.Context, string) (map[string]float64, *scm.Response, error) {
+	return nil, nil, scm.ErrNotSupported
+}
+
 func (s *repositoryService) CreateStatus(ctx context.Context, repo string, ref string, input *scm.StatusInput) (*scm.Status, *scm.Response, error) {
 	return nil, nil, scm.ErrNotSupported
 }
