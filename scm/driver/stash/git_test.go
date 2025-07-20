@@ -98,6 +98,7 @@ func TestGitListCommits(t *testing.T) {
 
 	gock.New("http://example.com:7990").
 		Get("/rest/api/1.0/projects/PRJ/repos/my-repo/commits").
+		MatchParam("until", "").
 		Reply(200).
 		Type("application/json").
 		File("testdata/commits.json")
@@ -136,6 +137,34 @@ func TestGitListBranches(t *testing.T) {
 
 	want := []*scm.Reference{}
 	raw, _ := ioutil.ReadFile("testdata/branches.json.golden")
+	_ = json.Unmarshal(raw, &want)
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("Unexpected Results")
+		t.Log(diff)
+	}
+	//
+	// t.Run("Page", testPage(res))
+}
+
+func TestGitListBranchesWithBranchFilter(t *testing.T) {
+	defer gock.Off()
+
+	gock.New("http://example.com:7990").
+		Get("/rest/api/1.0/projects/PRJ/repos/my-repo/branches").
+		MatchParam("filterText", "mast").
+		Reply(200).
+		Type("application/json").
+		File("testdata/branches_filter.json")
+
+	client, _ := New("http://example.com:7990")
+	got, _, err := client.Git.ListBranchesV2(context.Background(), "PRJ/my-repo", scm.BranchListOptions{SearchTerm: "mast"})
+	if err != nil {
+		t.Error(err)
+	}
+
+	want := []*scm.Reference{}
+	raw, _ := ioutil.ReadFile("testdata/branches_filter.json.golden")
 	_ = json.Unmarshal(raw, &want)
 
 	if diff := cmp.Diff(got, want); diff != "" {
@@ -238,7 +267,7 @@ func TestCreateBranch(t *testing.T) {
 		File("testdata/branch_create.json")
 
 	client, _ := New("http://example.com:7990")
-	params := &scm.CreateBranch{
+	params := &scm.ReferenceInput{
 		Name: "Hello",
 		Sha:  "312797ba52425353dec56871a255e2a36fc96344",
 	}

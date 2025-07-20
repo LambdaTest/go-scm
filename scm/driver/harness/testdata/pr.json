@@ -1,0 +1,36 @@
+{
+  "number": 1,
+  "created": 1710818863810,
+  "edited": 1710818863810,
+  "state": "open",
+  "is_draft": false,
+  "title": "feat: self as codeowner can be skipped",
+  "description": "123",
+  "source_repo_id": 7,
+  "source_branch": "abhinav/CODE-1508",
+  "source_sha": "6c4ab583f5201ed0421d0ef93ee5b0925ac08f62",
+  "target_repo_id": 7,
+  "target_branch": "main",
+  "merged": null,
+  "merge_method": null,
+  "merge_check_status": "mergeable",
+  "merge_target_sha": "b772dca15553986cc90fc6254a0fa47f4047526c",
+  "merge_base_sha": "b772dca15553986cc90fc6254a0fa47f4047526c",
+  "merge_sha": "ff13c81504ab3b04bd76b6af71e9c368333181a5",
+  "author": {
+    "id": 27,
+    "uid": "aqm0RQXGQI6v3m_f7u7C5A",
+    "display_name": "Abhinav Singh",
+    "email": "abhinav.singh@harness.io",
+    "type": "user",
+    "created": 1681264009453,
+    "updated": 1681264009453
+  },
+  "merger": null,
+  "stats": {
+    "commits": 1,
+    "files_changed": 1,
+    "conversations": 1,
+    "unresolved_count": 1
+  }
+}

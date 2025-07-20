@@ -65,6 +65,7 @@ type (
 		Deployment         bool
 		Issue              bool
 		IssueComment       bool
+		Pipeline           bool
 		PullRequest        bool
 		PullRequestComment bool
 		Push               bool
@@ -119,6 +120,12 @@ type (
 
 		// List returns a list of repositories.
 		List(context.Context, ListOptions) ([]*Repository, *Response, error)
+
+		// ListV2 returns a list of repositories based on the searchTerm passed.
+		ListV2(context.Context, RepoListOptions) ([]*Repository, *Response, error)
+
+		// ListNamespace returns a list of repos in namespace
+		ListNamespace(context.Context, string, ListOptions) ([]*Repository, *Response, error)
 
 		// List2 returns a list of repositories .
 		List2(context.Context, string, ListOptions) ([]*Repository, *Response, error)

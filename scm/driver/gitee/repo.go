@@ -45,6 +45,14 @@ func (s *RepositoryService) List(ctx context.Context, opts scm.ListOptions) ([]*
 	res, err := s.client.do(ctx, "GET", path, nil, &out)
 	return convertRepositoryList(out), res, err
 }
+func (s *RepositoryService) ListV2(ctx context.Context, opts scm.RepoListOptions) ([]*scm.Repository, *scm.Response, error) {
+	// gitee does not support search filters, hence calling List api without search filtering
+	return s.List(ctx, opts.ListOptions)
+}
+
+func (s *RepositoryService) ListNamespace(ctx context.Context, namespace string, opts scm.ListOptions) ([]*scm.Repository, *scm.Response, error) {
+	return nil, nil, scm.ErrNotSupported
+}
 
 func (s *RepositoryService) List2(ctx context.Context, orgSlug string, opts scm.ListOptions) ([]*scm.Repository, *scm.Response, error) {
 	return nil, nil, scm.ErrNotSupported
@@ -167,7 +175,7 @@ func convertRepositoryList(from []*repository) []*scm.Repository {
 func convertRepository(from *repository) *scm.Repository {
 	return &scm.Repository{
 		ID:        strconv.Itoa(from.ID),
-		Name:      from.Name,
+		Name:      from.Path,
 		Namespace: from.Namespace.Path,
 		Perm: &scm.Perm{
 			Push:  from.Permission.Push,

@@ -116,7 +116,7 @@ func TestGitCreateBranch(t *testing.T) {
 		SetHeaders(mockHeaders).
 		File("testdata/branch_create.json")
 
-	params := &scm.CreateBranch{
+	params := &scm.ReferenceInput{
 		Name: "Hello",
 		Sha:  "312797ba52425353dec56871a255e2a36fc96344",
 	}
@@ -211,7 +211,7 @@ func TestGitListTags(t *testing.T) {
 	defer gock.Off()
 
 	gock.New("https://api.github.com").
-		Get("/repos/octocat/hello-world/tags").
+		Get("/repos/octocat/hello-world/git/refs/tags").
 		MatchParam("page", "1").
 		MatchParam("per_page", "30").
 		Reply(200).

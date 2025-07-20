@@ -24,6 +24,22 @@ func encodePath(s string) string {
 	return strings.Replace(url.PathEscape(s), ".", "%2E", -1)
 }
 
+func encodeBranchListOptions(opts scm.BranchListOptions) string {
+	params := url.Values{}
+	if opts.SearchTerm != "" {
+		params.Set("search", opts.SearchTerm)
+	}
+	if opts.PageListOptions != (scm.ListOptions{}) {
+		if opts.PageListOptions.Page != 0 {
+			params.Set("page", strconv.Itoa(opts.PageListOptions.Page))
+		}
+		if opts.PageListOptions.Size != 0 {
+			params.Set("per_page", strconv.Itoa(opts.PageListOptions.Size))
+		}
+	}
+	return params.Encode()
+}
+
 func encodeListOptions(opts scm.ListOptions) string {
 	params := url.Values{}
 	if opts.Page != 0 {
@@ -43,6 +59,25 @@ func encodeMemberListOptions(opts scm.ListOptions) string {
 	}
 	if opts.Size != 0 {
 		params.Set("per_page", strconv.Itoa(opts.Size))
+	}
+	return params.Encode()
+}
+
+func encodeRepoListOptions(opts scm.RepoListOptions) string {
+	params := url.Values{}
+	params.Set("membership", "true")
+	if opts.RepoSearchTerm != (scm.RepoSearchTerm{}) {
+		if opts.RepoSearchTerm.RepoName != "" {
+			params.Set("search", opts.RepoSearchTerm.RepoName)
+		}
+	}
+	if opts.ListOptions != (scm.ListOptions{}) {
+		if opts.ListOptions.Page != 0 {
+			params.Set("page", strconv.Itoa(opts.ListOptions.Page))
+		}
+		if opts.ListOptions.Size != 0 {
+			params.Set("per_page", strconv.Itoa(opts.ListOptions.Size))
+		}
 	}
 	return params.Encode()
 }

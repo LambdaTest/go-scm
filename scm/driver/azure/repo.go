@@ -7,6 +7,8 @@ package azure
 import (
 	"context"
 	"fmt"
+	"net/url"
+	"strings"
 
 	"github.com/drone/go-scm/scm"
 )
@@ -27,7 +29,7 @@ func (s *RepositoryService) Find(ctx context.Context, repo string) (*scm.Reposit
 
 	out := new(repository)
 	res, err := s.client.do(ctx, "GET", endpoint, nil, &out)
-	return convertRepository(out), res, err
+	return convertRepository(out, s.client.owner), res, err
 }
 
 // FindHook returns a repository hook.
@@ -52,7 +54,19 @@ func (s *RepositoryService) List(ctx context.Context, opts scm.ListOptions) ([]*
 
 	out := new(repositories)
 	res, err := s.client.do(ctx, "GET", endpoint, nil, &out)
-	return convertRepositoryList(out), res, err
+	return convertRepositoryList(out, s.client.owner), res, err
+}
+
+// ListV2 returns the user repository list.
+func (s *RepositoryService) ListV2(ctx context.Context, opts scm.RepoListOptions) ([]*scm.Repository, *scm.Response, error) {
+	// Azure does not support search filters, hence calling List api without search filtering
+	return s.List(ctx, opts.ListOptions)
+}
+
+// ListNamespace is of no use in azure as our client already has project information
+func (s *RepositoryService) ListNamespace(ctx context.Context, _ string, opts scm.ListOptions) ([]*scm.Repository, *scm.Response, error) {
+	// Azure client already has org/proj information
+	return s.List(ctx, opts)
 }
 
 func (s *RepositoryService) List2(ctx context.Context, orgSlug string, opts scm.ListOptions) ([]*scm.Repository, *scm.Response, error) {
@@ -69,10 +83,14 @@ func (s *RepositoryService) ListHooks(ctx context.Context, repo string, opts scm
 	if s.client.project == "" {
 		return nil, nil, ProjectRequiredError()
 	}
+	projectID, projErr := s.getProjectIDFromProjectName(ctx, s.client.project)
+	if projErr != nil {
+		return nil, nil, fmt.Errorf("ListHooks was unable to look up the project's projectID, %s", projErr)
+	}
 	endpoint := fmt.Sprintf("%s/_apis/hooks/subscriptions?api-version=6.0", s.client.owner)
 	out := new(subscriptions)
 	res, err := s.client.do(ctx, "GET", endpoint, nil, &out)
-	return convertHookList(out.Value, repo), res, err
+	return convertHookList(out.Value, projectID, repo), res, err
 }
 
 // ListStatus returns a list of commit statuses.
@@ -113,6 +131,10 @@ func (s *RepositoryService) CreateHook(ctx context.Context, repo string, input *
 	if input.SkipVerify {
 		in.ConsumerInputs.AcceptUntrustedCerts = "enabled"
 	}
+	// with version 1.0, azure provides incomplete data for issue-comment
+	if in.EventType == "ms.vss-code.git-pullrequest-comment-event" {
+		in.ResourceVersion = "2.0"
+	}
 	out := new(subscription)
 	res, err := s.client.do(ctx, "POST", endpoint, in, out)
 	return convertHook(out), res, err
@@ -146,6 +168,11 @@ func (s *RepositoryService) DeleteHook(ctx context.Context, repo, id string) (*s
 // helper function to return the projectID from the project name
 func (s *RepositoryService) getProjectIDFromProjectName(ctx context.Context, projectName string) (string, error) {
 	// https://docs.microsoft.com/en-us/rest/api/azure/devops/core/projects/list?view=azure-devops-rest-6.0
+	projectName, err := url.PathUnescape(projectName)
+	if err != nil {
+		return "", fmt.Errorf("unable to unscape project: %s", projectName)
+	}
+
 	endpoint := fmt.Sprintf("%s/_apis/projects?api-version=6.0", s.client.owner)
 	type projects struct {
 		Count int64 `json:"count"`
@@ -182,10 +209,11 @@ type repository struct {
 	ID            string `json:"id"`
 	Name          string `json:"name"`
 	Project       struct {
-		ID    string `json:"id"`
-		Name  string `json:"name"`
-		State string `json:"state"`
-		URL   string `json:"url"`
+		ID         string `json:"id"`
+		Name       string `json:"name"`
+		State      string `json:"state"`
+		URL        string `json:"url"`
+		Visibility string `json:"visibility"`
 	} `json:"project"`
 	RemoteURL string `json:"remoteUrl"`
 	URL       string `json:"url"`
@@ -249,31 +277,36 @@ type subscription struct {
 	URL             string `json:"url"`
 }
 
-// helper function to convert from the gogs repository list to
+// helper function to convert from the azure devops repository list to
 // the common repository structure.
-func convertRepositoryList(from *repositories) []*scm.Repository {
+func convertRepositoryList(from *repositories, owner string) []*scm.Repository {
 	to := []*scm.Repository{}
 	for _, v := range from.Value {
-		to = append(to, convertRepository(v))
+		to = append(to, convertRepository(v, owner))
 	}
 	return to
 }
 
-// helper function to convert from the gogs repository structure
+// helper function to convert from the azure devops repository structure
 // to the common repository structure.
-func convertRepository(from *repository) *scm.Repository {
+func convertRepository(from *repository, owner string) *scm.Repository {
+	namespace := []string{owner, from.Project.Name}
 	return &scm.Repository{
-		ID:     from.ID,
-		Name:   from.Name,
-		Link:   from.URL,
-		Branch: scm.TrimRef(from.DefaultBranch),
+		ID:         from.ID,
+		Name:       from.Name,
+		Namespace:  strings.Join(namespace, "/"),
+		Link:       from.URL,
+		Branch:     scm.TrimRef(from.DefaultBranch),
+		Clone:      from.RemoteURL,
+		Private:    scm.ConvertPrivate(from.Project.Visibility),
+		Visibility: scm.ConvertVisibility(from.Project.Visibility),
 	}
 }
 
-func convertHookList(from []*subscription, repositoryFilter string) []*scm.Hook {
+func convertHookList(from []*subscription, projectFilter string, repositoryFilter string) []*scm.Hook {
 	to := []*scm.Hook{}
 	for _, v := range from {
-		if repositoryFilter != "" && repositoryFilter == v.PublisherInputs.Repository {
+		if repositoryFilter != "" && projectFilter == v.PublisherInputs.ProjectID && repositoryFilter == v.PublisherInputs.Repository {
 			to = append(to, convertHook(v))
 		}
 	}

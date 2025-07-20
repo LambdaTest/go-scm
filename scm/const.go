@@ -40,8 +40,14 @@ const (
 	// pull requests
 	ActionSync
 	ActionMerge
+	ActionReviewReady
 	// issue comment
 	ActionEdit
+	// release
+	ActionPublish
+	ActionUnpublish
+	ActionPrerelease
+	ActionRelease
 )
 
 // String returns the string representation of Action.
@@ -67,6 +73,16 @@ func (a Action) String() (s string) {
 		return "synchronized"
 	case ActionMerge:
 		return "merged"
+	case ActionPublish:
+		return "published"
+	case ActionUnpublish:
+		return "unpublished"
+	case ActionPrerelease:
+		return "prereleased"
+	case ActionRelease:
+		return "released"
+	case ActionReviewReady:
+		return "review_ready"
 	default:
 		return
 	}
@@ -104,6 +120,18 @@ func (a *Action) UnmarshalJSON(data []byte) error {
 		*a = ActionSync
 	case "merged":
 		*a = ActionMerge
+	case "edited":
+		*a = ActionEdit
+	case "published":
+		*a = ActionPublish
+	case "unpublished":
+		*a = ActionUnpublish
+	case "prereleased":
+		*a = ActionPrerelease
+	case "released":
+		*a = ActionRelease
+	case "review_ready":
+		*a = ActionReviewReady
 	}
 	return nil
 }
@@ -123,6 +151,7 @@ const (
 	DriverCoding
 	DriverGitee
 	DriverAzure
+	DriverHarness
 )
 
 // String returns the string representation of Driver.
@@ -146,6 +175,8 @@ func (d Driver) String() (s string) {
 		return "gitee"
 	case DriverAzure:
 		return "azure"
+	case DriverHarness:
+		return "harness"
 	default:
 		return "unknown"
 	}
@@ -253,6 +284,68 @@ func (v Visibility) String() (s string) {
 	default:
 		return "unknown"
 	}
+}
+
+// Status defines an enum for execution status
+type ExecutionStatus int
+
+const (
+	StatusUnknown ExecutionStatus = iota
+	StatusPending
+	StatusRunning
+	StatusSuccess
+	StatusFailed
+	StatusCanceled
+)
+
+// String returns the string representation of ExecutionStatus.
+func (k ExecutionStatus) String() string {
+	switch k {
+	case StatusSuccess:
+		return "success"
+	case StatusPending:
+		return "pending"
+	case StatusRunning:
+		return "running"
+	case StatusFailed:
+		return "failed"
+	case StatusCanceled:
+		return "canceled"
+	case StatusUnknown:
+		return "Unknown"
+	default:
+		return "unsupported"
+	}
+}
+
+// MarshalJSON returns the JSON-encoded Action.
+func (k ExecutionStatus) MarshalJSON() ([]byte, error) {
+	return json.Marshal(k.String())
+}
+
+// UnmarshalJSON unmarshales the JSON-encoded ExecutionStatus.
+func (k *ExecutionStatus) UnmarshalJSON(data []byte) error {
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return err
+	}
+	switch s {
+	case StatusSuccess.String():
+		*k = StatusSuccess
+	case StatusPending.String():
+		*k = StatusPending
+	case StatusPending.String():
+		*k = StatusPending
+	case StatusRunning.String():
+		*k = StatusRunning
+	case StatusFailed.String():
+		*k = StatusFailed
+	case StatusCanceled.String():
+		*k = StatusCanceled
+	default:
+		*k = StatusUnknown
+	}
+	return nil
 }
 
 const SearchTimeFormat = "2006-01-02T15:04:05Z"

@@ -16,7 +16,7 @@ type gitService struct {
 	client *wrapper
 }
 
-func (s *gitService) CreateBranch(ctx context.Context, repo string, params *scm.CreateBranch) (*scm.Response, error) {
+func (s *gitService) CreateBranch(ctx context.Context, repo string, params *scm.ReferenceInput) (*scm.Response, error) {
 	path := fmt.Sprintf("repos/%s/branches", repo)
 	in := &branchCreate{
 		Refs:       params.Sha,
@@ -58,6 +58,12 @@ func (s *gitService) ListBranches(ctx context.Context, repo string, _ scm.ListOp
 	out := []*branch{}
 	res, err := s.client.do(ctx, "GET", path, nil, &out)
 	return convertBranchList(out), res, err
+}
+
+func (s *gitService) ListBranchesV2(ctx context.Context, repo string, opts scm.BranchListOptions) ([]*scm.Reference, *scm.Response, error) {
+	// Gitee doesnt provide support listing based on searchTerm
+	// Hence calling the ListBranches
+	return s.ListBranches(ctx, repo, opts.PageListOptions)
 }
 
 func (s *gitService) ListCommits(ctx context.Context, repo string, opts scm.CommitListOptions) ([]*scm.Commit, *scm.Response, error) {

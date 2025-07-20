@@ -48,6 +48,10 @@ func (s *webhookService) Parse(req *http.Request, fn scm.SecretFunc) (scm.Webhoo
 	// case "issues":
 	case "issue_comment":
 		hook, err = s.parseIssueCommentHook(data)
+	case "release":
+		hook, err = s.parseReleaseHook(data)
+	case "workflow_run":
+		hook, err = s.parsePipelineHook(data)
 	default:
 		return nil, scm.ErrUnknownEvent
 	}
@@ -172,8 +176,94 @@ func (s *webhookService) parsePullRequestHook(data []byte) (scm.Webhook, error) 
 		dst.Action = scm.ActionReopen
 	case "synchronize":
 		dst.Action = scm.ActionSync
-	case "assigned", "unassigned", "review_requested", "review_request_removed", "ready_for_review", "locked", "unlocked":
+	case "ready_for_review":
+		dst.Action = scm.ActionReviewReady
+	case "assigned", "unassigned", "review_requested", "review_request_removed", "locked", "unlocked":
 		dst.Action = scm.ActionUnknown
+	default:
+		dst.Action = scm.ActionUnknown
+	}
+	return dst, nil
+}
+
+func (s *webhookService) parsePipelineHook(data []byte) (scm.Webhook, error) {
+	src := new(pipelineHook)
+	err := json.Unmarshal(data, src)
+	if err != nil {
+		return nil, err
+	}
+	dst, err := convertPipelineHook(src), nil
+	return dst, nil
+}
+
+func convertPipelineHook(src *pipelineHook) *scm.PipelineHook {
+	pr := scm.PullRequest{}
+	if len(src.WorkflowRun.PullRequests) > 0 {
+		pr = scm.PullRequest{
+			Number:  src.WorkflowRun.PullRequests[0].Number,
+			Sha:     src.WorkflowRun.PullRequests[0].Head.SHA,
+			Ref:     src.WorkflowRun.PullRequests[0].Head.Ref,
+			Source:  src.WorkflowRun.PullRequests[0].Head.Ref,
+			Target:  src.WorkflowRun.PullRequests[0].Base.Ref,
+			Link:    src.WorkflowRun.PullRequests[0].URL,
+			Created: src.WorkflowRun.CreatedAt,
+		}
+	}
+
+	var execution_status string
+	if src.WorkflowRun.Status == "completed" {
+		execution_status = src.WorkflowRun.Conclusion.String
+	} else {
+		execution_status = src.WorkflowRun.Status
+	}
+
+	return &scm.PipelineHook{
+		Repo: *convertRepository(&src.Repository),
+		Commit: scm.Commit{
+			Sha:     src.WorkflowRun.HeadCommit.ID,
+			Message: src.WorkflowRun.HeadCommit.Message,
+			Author: scm.Signature{
+				Name:  src.WorkflowRun.HeadCommit.Author.Name,
+				Email: src.WorkflowRun.HeadCommit.Author.Email,
+			},
+			Committer: scm.Signature{
+				Name:  src.WorkflowRun.HeadCommit.Committer.Name,
+				Email: src.WorkflowRun.HeadCommit.Committer.Email,
+			},
+		},
+		Execution: scm.Execution{
+			Number:  int(src.WorkflowRun.RunNumber),
+			Status:  scm.ConvertExecutionStatus(execution_status),
+			Created: src.WorkflowRun.CreatedAt,
+			URL:     src.WorkflowRun.URL,
+		},
+		Sender:      *convertUser(&src.Sender),
+		PullRequest: pr,
+	}
+}
+
+func (s *webhookService) parseReleaseHook(data []byte) (scm.Webhook, error) {
+	src := new(releaseHook)
+	err := json.Unmarshal(data, src)
+	if err != nil {
+		return nil, err
+	}
+	dst := convertReleaseHook(src)
+	switch src.Action {
+	case "created":
+		dst.Action = scm.ActionCreate
+	case "edited":
+		dst.Action = scm.ActionEdit
+	case "deleted":
+		dst.Action = scm.ActionDelete
+	case "published":
+		dst.Action = scm.ActionPublish
+	case "unpublished":
+		dst.Action = scm.ActionUnpublish
+	case "prereleased":
+		dst.Action = scm.ActionPrerelease
+	case "released":
+		dst.Action = scm.ActionRelease
 	default:
 		dst.Action = scm.ActionUnknown
 	}
@@ -319,6 +409,99 @@ type (
 			Updated time.Time `json:"updated_at"`
 		} `json:"comment"`
 	}
+
+	// github release webhook payload
+	releaseHook struct {
+		Action  string `json:"action"`
+		Release struct {
+			ID          int       `json:"id"`
+			Title       string    `json:"name"`
+			Description string    `json:"body"`
+			Link        string    `json:"html_url,omitempty"`
+			Tag         string    `json:"tag_name,omitempty"`
+			Commitish   string    `json:"target_commitish,omitempty"`
+			Draft       bool      `json:"draft"`
+			Prerelease  bool      `json:"prerelease"`
+			Created     time.Time `json:"created_at"`
+			Published   time.Time `json:"published_at"`
+		} `json:"release"`
+		Repository repository `json:"repository"`
+		Sender     user       `json:"sender"`
+	}
+
+	pipelineHook struct {
+		Action      string `json:"action"`
+		Sender      user
+		WorkflowRun struct {
+			ID               int64       `json:"id"`
+			Name             string      `json:"name"`
+			NodeID           string      `json:"node_id"`
+			HeadBranch       string      `json:"head_branch"`
+			HeadSHA          string      `json:"head_sha"`
+			Path             string      `json:"path"`
+			DisplayTitle     string      `json:"display_title"`
+			RunNumber        int         `json:"run_number"`
+			Event            string      `json:"event"`
+			Status           string      `json:"status"`
+			Conclusion       null.String `json:"conclusion"`
+			WorkflowID       int64       `json:"workflow_id"`
+			CheckSuiteID     int64       `json:"check_suite_id"`
+			CheckSuiteNodeID string      `json:"check_suite_node_id"`
+			URL              string      `json:"url"`
+			HtmlURL          string      `json:"html_url"`
+			PullRequests     []struct {
+				URL    string `json:"url"`
+				ID     int64  `json:"id"`
+				Number int    `json:"number"`
+				Head   gitRef `json:"head"`
+				Base   gitRef `json:"base"`
+			} `json:"pull_requests"`
+			CreatedAt          time.Time   `json:"created_at"`
+			UpdatedAt          time.Time   `json:"updated_at"`
+			Actor              owner       `json:"actor"`
+			RunAttempt         int         `json:"run_attempt"`
+			RunStartedAt       time.Time   `json:"run_started_at"`
+			TriggeringActor    owner       `json:"triggering_actor"`
+			JobsURL            string      `json:"jobs_url"`
+			LogsURL            string      `json:"logs_url"`
+			CheckSuiteURL      string      `json:"check_suite_url"`
+			ArtifactsURL       string      `json:"artifacts_url"`
+			CancelURL          string      `json:"cancel_url"`
+			RerunURL           string      `json:"rerun_url"`
+			PreviousAttemptURL null.String `json:"previous_attempt_url"`
+			WorkflowURL        string      `json:"workflow_url"`
+			HeadCommit         struct {
+				ID        string    `json:"id"`
+				TreeID    string    `json:"tree_id"`
+				Message   string    `json:"message"`
+				Timestamp time.Time `json:"timestamp"`
+				Author    author    `json:"author"`
+				Committer author    `json:"committer"`
+			} `json:"head_commit"`
+		} `json:"workflow_run"`
+		Repository repository `json:"repository"`
+	}
+
+	gitRef struct {
+		Ref  string     `json:"ref"`
+		SHA  string     `json:"sha"`
+		Repo repository `json:"repo"`
+	}
+
+	owner struct {
+		Login     string `json:"login"`
+		ID        int64  `json:"id"`
+		NodeID    string `json:"node_id"`
+		AvatarURL string `json:"avatar_url"`
+		HTMLURL   string `json:"html_url"`
+		Type      string `json:"type"`
+		SiteAdmin bool   `json:"site_admin"`
+	}
+
+	author struct {
+		Name  string `json:"name"`
+		Email string `json:"email"`
+	}
 )
 
 //
@@ -378,7 +561,7 @@ func convertPushHook(src *pushHook) *scm.PushHook {
 			Name:       src.Repository.Name,
 			Branch:     src.Repository.DefaultBranch,
 			Private:    src.Repository.Private,
-			Visibility: convertVisibility(src.Repository.Visibility),
+			Visibility: scm.ConvertVisibility(src.Repository.Visibility),
 			Clone:      src.Repository.CloneURL,
 			CloneSSH:   src.Repository.SSHURL,
 			Link:       src.Repository.HTMLURL,
@@ -405,7 +588,7 @@ func convertBranchHook(src *createDeleteHook) *scm.BranchHook {
 			Name:       src.Repository.Name,
 			Branch:     src.Repository.DefaultBranch,
 			Private:    src.Repository.Private,
-			Visibility: convertVisibility(src.Repository.Visibility),
+			Visibility: scm.ConvertVisibility(src.Repository.Visibility),
 			Clone:      src.Repository.CloneURL,
 			CloneSSH:   src.Repository.SSHURL,
 			Link:       src.Repository.HTMLURL,
@@ -425,7 +608,7 @@ func convertTagHook(src *createDeleteHook) *scm.TagHook {
 			Name:       src.Repository.Name,
 			Branch:     src.Repository.DefaultBranch,
 			Private:    src.Repository.Private,
-			Visibility: convertVisibility(src.Repository.Visibility),
+			Visibility: scm.ConvertVisibility(src.Repository.Visibility),
 			Clone:      src.Repository.CloneURL,
 			CloneSSH:   src.Repository.SSHURL,
 			Link:       src.Repository.HTMLURL,
@@ -443,7 +626,7 @@ func convertPullRequestHook(src *pullRequestHook) *scm.PullRequestHook {
 			Name:       src.Repository.Name,
 			Branch:     src.Repository.DefaultBranch,
 			Private:    src.Repository.Private,
-			Visibility: convertVisibility(src.Repository.Visibility),
+			Visibility: scm.ConvertVisibility(src.Repository.Visibility),
 			Clone:      src.Repository.CloneURL,
 			CloneSSH:   src.Repository.SSHURL,
 			Link:       src.Repository.HTMLURL,
@@ -469,7 +652,7 @@ func convertDeploymentHook(src *deploymentHook) *scm.DeployHook {
 			Name:       src.Repository.Name,
 			Branch:     src.Repository.DefaultBranch,
 			Private:    src.Repository.Private,
-			Visibility: convertVisibility(src.Repository.Visibility),
+			Visibility: scm.ConvertVisibility(src.Repository.Visibility),
 			Clone:      src.Repository.CloneURL,
 			CloneSSH:   src.Repository.SSHURL,
 			Link:       src.Repository.HTMLURL,
@@ -518,7 +701,7 @@ func convertIssueCommentHook(src *issueCommentHook) *scm.IssueCommentHook {
 			Name:       src.Repository.Name,
 			Branch:     src.Repository.DefaultBranch,
 			Private:    src.Repository.Private,
-			Visibility: convertVisibility(src.Repository.Visibility),
+			Visibility: scm.ConvertVisibility(src.Repository.Visibility),
 			Clone:      src.Repository.CloneURL,
 			CloneSSH:   src.Repository.SSHURL,
 			Link:       src.Repository.HTMLURL,
@@ -530,6 +713,36 @@ func convertIssueCommentHook(src *issueCommentHook) *scm.IssueCommentHook {
 			Author:  *convertUser(&src.Comment.User),
 			Created: src.Comment.Created,
 			Updated: src.Comment.Updated,
+		},
+		Sender: *convertUser(&src.Sender),
+	}
+	return dst
+}
+
+func convertReleaseHook(src *releaseHook) *scm.ReleaseHook {
+	dst := &scm.ReleaseHook{
+		Release: scm.Release{
+			ID:          src.Release.ID,
+			Title:       src.Release.Title,
+			Description: src.Release.Description,
+			Link:        src.Release.Link,
+			Tag:         src.Release.Tag,
+			Commitish:   src.Release.Commitish,
+			Draft:       src.Release.Draft,
+			Prerelease:  src.Release.Prerelease,
+			Created:     src.Release.Created,
+			Published:   src.Release.Published,
+		},
+		Repo: scm.Repository{
+			ID:         fmt.Sprint(src.Repository.ID),
+			Namespace:  src.Repository.Owner.Login,
+			Name:       src.Repository.Name,
+			Branch:     src.Repository.DefaultBranch,
+			Private:    src.Repository.Private,
+			Visibility: scm.ConvertVisibility(src.Repository.Visibility),
+			Clone:      src.Repository.CloneURL,
+			CloneSSH:   src.Repository.SSHURL,
+			Link:       src.Repository.HTMLURL,
 		},
 		Sender: *convertUser(&src.Sender),
 	}

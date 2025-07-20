@@ -81,7 +81,7 @@ type hookInput struct {
 	URL    string   `json:"url"`
 	Active bool     `json:"active"`
 	Config struct {
-		Secret string `json:"secret"`
+		Secret string `json:"secret,omitempty"`
 	} `json:"configuration"`
 }
 
@@ -103,7 +103,19 @@ func (s *repositoryService) Find(ctx context.Context, repo string) (*scm.Reposit
 	path := fmt.Sprintf("rest/api/1.0/projects/%s/repos/%s", namespace, name)
 	out := new(repository)
 	res, err := s.client.do(ctx, "GET", path, nil, out)
-	return convertRepository(out), res, err
+	outputRepo := convertRepository(out)
+
+	branch := new(branch)
+	pathBranch := fmt.Sprintf("rest/api/1.0/projects/%s/repos/%s/branches/default", namespace, name)
+	_, errBranch := s.client.do(ctx, "GET", pathBranch, nil, branch)
+	if errBranch == nil {
+		outputRepo.Branch = branch.DisplayID
+	}
+	if err == nil {
+		err = errBranch
+	}
+
+	return outputRepo, res, err
 }
 
 // FindHook returns a repository hook.
@@ -159,6 +171,30 @@ func (s *repositoryService) FindPerms(ctx context.Context, repo string) (*scm.Pe
 // List returns the user repository list.
 func (s *repositoryService) List(ctx context.Context, opts scm.ListOptions) ([]*scm.Repository, *scm.Response, error) {
 	path := fmt.Sprintf("rest/api/1.0/repos?%s", encodeListRoleOptions(opts))
+	out := new(repositories)
+	res, err := s.client.do(ctx, "GET", path, nil, &out)
+	if res != nil && !out.pagination.LastPage.Bool {
+		res.Page.First = 1
+		res.Page.Next = opts.Page + 1
+	}
+	return convertRepositoryList(out), res, err
+}
+
+// ListV2 returns the user repository list based on the searchTerm passed.
+func (s *repositoryService) ListV2(ctx context.Context, opts scm.RepoListOptions) ([]*scm.Repository, *scm.Response, error) {
+	path := fmt.Sprintf("rest/api/1.0/repos?%s", encodeRepoListOptions(opts))
+	out := new(repositories)
+	res, err := s.client.do(ctx, "GET", path, nil, &out)
+	if res != nil && !out.pagination.LastPage.Bool {
+		res.Page.First = 1
+		res.Page.Next = opts.ListOptions.Page + 1
+	}
+	return convertRepositoryList(out), res, err
+}
+
+// ListNamespace returns the user repository list based on searchterm and namespace.
+func (s *repositoryService) ListNamespace(ctx context.Context, namespace string, opts scm.ListOptions) ([]*scm.Repository, *scm.Response, error) {
+	path := fmt.Sprintf("rest/api/1.0/projects/%s/repos?%s", namespace, encodeListRoleOptions(opts))
 	out := new(repositories)
 	res, err := s.client.do(ctx, "GET", path, nil, &out)
 	if res != nil && !out.pagination.LastPage.Bool {
