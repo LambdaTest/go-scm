@@ -25,6 +25,8 @@ func (s *RepositoryService) Find(ctx context.Context, repo string) (*scm.Reposit
 	if s.client.project == "" {
 		return nil, nil, ProjectRequiredError()
 	}
+		return nil, nil, ProjectRequiredError()
+	}
 	endpoint := fmt.Sprintf("%s/%s/_apis/git/repositories/%s?api-version=6.0", s.client.owner, s.client.project, repo)
 
 	out := new(repository)
@@ -69,6 +71,22 @@ func (s *RepositoryService) ListNamespace(ctx context.Context, _ string, opts sc
 	return s.List(ctx, opts)
 }
 
+func (s *RepositoryService) List2(ctx context.Context, orgSlug string, opts scm.ListOptions) ([]*scm.Repository, *scm.Response, error) {
+	return nil, nil, scm.ErrNotSupported
+}
+
+func (s *RepositoryService) ListRepoLanguages(context.Context, string) (map[string]float64, *scm.Response, error) {
+	return nil, nil, scm.ErrNotSupported
+}
+
+func (s *RepositoryService) List2(ctx context.Context, orgSlug string, opts scm.ListOptions) ([]*scm.Repository, *scm.Response, error) {
+	return nil, nil, scm.ErrNotSupported
+}
+
+func (s *RepositoryService) ListRepoLanguages(context.Context, string) (map[string]float64, *scm.Response, error) {
+	return nil, nil, scm.ErrNotSupported
+}
+
 // ListHooks returns a list or repository hooks.
 func (s *RepositoryService) ListHooks(ctx context.Context, repo string, opts scm.ListOptions) ([]*scm.Hook, *scm.Response, error) {
 	// https://docs.microsoft.com/en-us/rest/api/azure/devops/hooks/subscriptions/list?view=azure-devops-rest-6.0
@@ -94,6 +112,8 @@ func (s *RepositoryService) ListStatus(ctx context.Context, repo, ref string, op
 func (s *RepositoryService) CreateHook(ctx context.Context, repo string, input *scm.HookInput) (*scm.Hook, *scm.Response, error) {
 	// https://docs.microsoft.com/en-us/rest/api/azure/devops/hooks/subscriptions/create?view=azure-devops-rest-6.0
 	if s.client.project == "" {
+		return nil, nil, ProjectRequiredError()
+	}
 		return nil, nil, ProjectRequiredError()
 	}
 	endpoint := fmt.Sprintf("%s/_apis/hooks/subscriptions?api-version=6.0", s.client.owner)

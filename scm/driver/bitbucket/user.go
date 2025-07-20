@@ -6,6 +6,7 @@ package bitbucket
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/drone/go-scm/scm"

@@ -53,9 +53,10 @@ type user struct {
 }
 
 type email struct {
-	Email    string `json:"email"`
-	Primary  bool   `json:"primary"`
-	Verified bool   `json:"verified"`
+	Email      string `json:"email"`
+	Verified   bool   `json:"verified"`
+	Primary    bool   `json:"primary"`
+	Visibility string `json:"visibility"`
 }
 
 func convertUser(from *user) *scm.User {

@@ -109,6 +109,17 @@ func (s *repositoryService) ListNamespace(ctx context.Context, namespace string,
 	return convertRepositoryList(out), res, err
 }
 
+func (s *repositoryService) List2(ctx context.Context, orgSlug string, opts scm.ListOptions) ([]*scm.Repository, *scm.Response, error) {
+	return nil, nil, scm.ErrNotSupported
+}
+
+func (s *repositoryService) ListRepoLanguages(ctx context.Context, repo string) (map[string]float64, *scm.Response, error) {
+	path := fmt.Sprintf("api/v4/projects/%s/languages", encode(repo))
+	out := map[string]float64{}
+	res, err := s.client.do(ctx, "GET", path, nil, &out)
+	return out, res, err
+}
+
 func (s *repositoryService) ListHooks(ctx context.Context, repo string, opts scm.ListOptions) ([]*scm.Hook, *scm.Response, error) {
 	path := fmt.Sprintf("api/v4/projects/%s/hooks?%s", encode(repo), encodeListOptions(opts))
 	out := []*hook{}
@@ -166,6 +177,7 @@ func (s *repositoryService) CreateStatus(ctx context.Context, repo, ref string, 
 	params.Set("state", convertFromState(input.State))
 	params.Set("name", input.Label)
 	params.Set("target_url", input.Target)
+	params.Set("description", input.Desc)
 	path := fmt.Sprintf("api/v4/projects/%s/statuses/%s?%s", encode(repo), ref, params.Encode())
 	out := new(status)
 	res, err := s.client.do(ctx, "POST", path, nil, out)

@@ -1,4 +1,8 @@
 {
     "Active": true,
-    "Role": 2
+    "Role": 2,
+    "Organization": {
+        "Name" : "github",
+        "Avatar" : "https://avatars1.githubusercontent.com/u/2181346?v=4"
+    }
 }

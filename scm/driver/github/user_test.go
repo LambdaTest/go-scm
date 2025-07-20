@@ -88,6 +88,7 @@ func TestUserEmailFind(t *testing.T) {
 
 	gock.New("https://api.github.com").
 		Get("/user/emails").
+		Get("/user/emails").
 		Reply(200).
 		Type("application/json").
 		SetHeader("X-GitHub-Request-Id", "DD0E:6011:12F21A8:1926790:5A2064E2").

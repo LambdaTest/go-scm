@@ -133,6 +133,12 @@ type (
 		Sender  User
 	}
 
+	// PingHook represents a ping hook, eg ping events.
+	PingHook struct {
+		Repo   Repository
+		Sender User
+	}
+
 	// SecretFunc provides the Webhook parser with the
 	// secret key used to validate webhook authenticity.
 	SecretFunc func(webhook Webhook) (string, error)
@@ -160,3 +166,4 @@ func (h *PullRequestCommentHook) Repository() Repository { return h.Repo }
 func (h *ReviewCommentHook) Repository() Repository      { return h.Repo }
 func (h *ReleaseHook) Repository() Repository            { return h.Repo }
 func (h *PipelineHook) Repository() Repository           { return h.Repo }
+func (h *PingHook) Repository() Repository               { return h.Repo }

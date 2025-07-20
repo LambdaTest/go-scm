@@ -17,8 +17,9 @@ type (
 
 	// Membership represents an organization membership.
 	Membership struct {
-		Active bool
-		Role   Role
+		Active       bool
+		Role         Role
+		Organization Organization
 	}
 
 	// OrganizationService provides access to organization resources.
@@ -29,6 +30,9 @@ type (
 		// FindMembership returns the organization membership
 		// by a given user account.
 		FindMembership(ctx context.Context, name, username string) (*Membership, *Response, error)
+
+		// ListMemberships returns the organizations membership for authenticated user
+		ListMemberships(ctx context.Context, orgNameList []string, username string, opts ListOptions) ([]*Membership, *Response, error)
 
 		// List returns the user organization list.
 		List(ctx context.Context, opts ListOptions) ([]*Organization, *Response, error)

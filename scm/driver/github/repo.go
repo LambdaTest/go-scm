@@ -44,6 +44,10 @@ type searchRepositoryList struct {
 	Repositories []*repository `json:"items"`
 }
 
+type repositoryList2 struct {
+	Repositories []*repository `json:"repositories"`
+}
+
 type hook struct {
 	ID     int      `json:"id,omitempty"`
 	Name   string   `json:"name"`
@@ -136,6 +140,20 @@ func (s *RepositoryService) ListByInstallation(ctx context.Context, opts scm.Lis
 	out := new(repositoryList)
 	res, err := s.client.do(ctx, "GET", path, nil, out)
 	return convertRepositoryList(out.Repositories), res, err
+}
+
+func (s *RepositoryService) List2(ctx context.Context, installationID string, opts scm.ListOptions) ([]*scm.Repository, *scm.Response, error) {
+	path := fmt.Sprintf("user/installations/%s/repositories?%s", installationID, encodeListOptions(opts))
+	out := new(repositoryList2)
+	res, err := s.client.do(ctx, "GET", path, nil, &out)
+	return convertRepositoryList(out.Repositories), res, err
+}
+
+func (s *RepositoryService) ListRepoLanguages(ctx context.Context, repo string) (map[string]float64, *scm.Response, error) {
+	path := fmt.Sprintf("repos/%s/languages", repo)
+	out := map[string]float64{}
+	res, err := s.client.do(ctx, "GET", path, nil, &out)
+	return out, res, err
 }
 
 // ListHooks returns a list or repository hooks.

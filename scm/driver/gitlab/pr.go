@@ -133,7 +133,6 @@ type pr struct {
 		StartSha string `json:"start_sha"`
 	} `json:"diff_refs"`
 }
-
 type changes struct {
 	Changes []*change
 }
