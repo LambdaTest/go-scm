@@ -32,10 +32,11 @@ func New(uri string) (*scm.Client, error) {
 	// initialize services
 	client.Driver = scm.DriverGitea
 	client.Linker = &linker{base.String()}
+	client.Apps = &appsService{client}
 	client.Contents = &contentService{client}
 	client.Git = &gitService{client}
 	client.Issues = &issueService{client}
-	client.Milestones = & milestoneService{client}
+	client.Milestones = &milestoneService{client}
 	client.Organizations = &organizationService{client}
 	client.PullRequests = &pullService{client}
 	client.Repositories = &repositoryService{client}

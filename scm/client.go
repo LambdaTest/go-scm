@@ -110,6 +110,7 @@ type (
 		// Services used for communicating with the API.
 		Driver        Driver
 		Linker        Linker
+		Apps          AppsService
 		Contents      ContentService
 		Git           GitService
 		Organizations OrganizationService
@@ -230,7 +231,7 @@ func (c *Client) Do(ctx context.Context, in *Request) (*Response, error) {
 	return newResponse(res), nil
 }
 
-//requestDetails checks if RequestContextKey exits in the context
+// requestDetails checks if RequestContextKey exits in the context
 func (c *Client) requestDetails(ctx context.Context) (*RequestDetails, error) {
 	requestDetails, _ := ctx.Value(RequestContextKey{}).(*RequestDetails)
 	return requestDetails, nil

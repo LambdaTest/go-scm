@@ -30,6 +30,7 @@ func New(uri string) (*scm.Client, error) {
 	// initialize services
 	client.Driver = scm.DriverGitee
 	client.Linker = &linker{websiteAddress(base)}
+	client.Apps = &appsService{client}
 	client.Contents = &contentService{client}
 	client.Git = &gitService{client}
 	client.Issues = &issueService{client}
