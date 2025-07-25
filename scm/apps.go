@@ -114,7 +114,7 @@ type (
 		Workflows                     string `json:"workflows,omitempty"`
 	}
 
-	// AppsService provides access to GitHub Apps related functions.
+	// AppsService provides access to Apps-related functions.
 	AppsService interface {
 		// Get returns a single GitHub App. Passing the empty string will get
 		// the authenticated GitHub App.
