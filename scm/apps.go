@@ -26,7 +26,7 @@ type (
 		Events      []string
 	}
 
-	// Installation represents a GitHub Apps installation.
+	// Installation represents an Apps installation.
 	Installation struct {
 		ID                     int64
 		NodeID                 string
