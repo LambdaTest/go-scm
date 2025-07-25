@@ -10,7 +10,7 @@ import (
 )
 
 type (
-	// App represents a GitHub App.
+	// App represents an SCM App.
 	App struct {
 		ID          int64
 		Slug        string
