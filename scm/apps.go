@@ -116,8 +116,8 @@ type (
 
 	// AppsService provides access to Apps-related functions.
 	AppsService interface {
-		// Get returns a single GitHub App. Passing the empty string will get
-		// the authenticated GitHub App.
+		// Get returns a single App. Passing the empty string will get
+		// the authenticated App.
 		Get(ctx context.Context, appSlug string) (*App, *Response, error)
 
 		// ListInstallations lists the installations that the current GitHub App has.
