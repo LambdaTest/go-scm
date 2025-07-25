@@ -120,7 +120,7 @@ type (
 		// the authenticated App.
 		Get(ctx context.Context, appSlug string) (*App, *Response, error)
 
-		// ListInstallations lists the installations that the current GitHub App has.
+		// ListInstallations lists the installations that the current App has.
 		ListInstallations(ctx context.Context, opts ListOptions) ([]*Installation, *Response, error)
 
 		// GetInstallation returns the specified installation.
