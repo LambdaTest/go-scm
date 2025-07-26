@@ -29,6 +29,7 @@ func New(uri, account, organization, project string) (*scm.Client, error) {
 	// initialize services
 	client.Driver = scm.DriverHarness
 	client.Linker = &linker{base.String()}
+	client.Apps = &appsService{client}
 	client.Contents = &contentService{client}
 	client.Git = &gitService{client}
 	client.Issues = &issueService{client}
