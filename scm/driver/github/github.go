@@ -58,12 +58,14 @@ func NewWithProxy(uri, proxyURL string) (*scm.Client, error) {
 	client.Users = &userService{client}
 	client.Webhooks = &webhookService{client}
 	
+	client.Client.Client = &http.Client{Transport: http.DefaultTransport}
+
 	if proxyURL != "" {
 		transport, err := proxy.NewTransport(http.DefaultTransport, proxyURL)
 		if err != nil {
 			return nil, err
 		}
-		client.Client.Client = &http.Client{Transport: transport}
+		client.Client.Client.Transport = transport
 	}
 
 	return client.Client, nil
