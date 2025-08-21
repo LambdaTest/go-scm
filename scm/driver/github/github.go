@@ -21,13 +21,13 @@ import (
 // New returns a new GitHub API client.
 // This function maintains backward compatibility and creates a client without proxy.
 func New(uri string) (*scm.Client, error) {
-	return NewWithProxy(uri, "")
+	return NewWithOptionalProxy(uri, "")
 }
 
 // NewWithProxy returns a new GitHub API client with optional proxy support.
 // If proxyURL is empty or nil, no proxy will be used.
 // If proxyURL is provided, all HTTP requests will be routed through the specified proxy.
-func NewWithProxy(uri, proxyURL string) (*scm.Client, error) {
+func NewWithOptionalProxy(uri, proxyURL string) (*scm.Client, error) {
 	base, err := url.Parse(uri)
 	if err != nil {
 		return nil, err
@@ -57,7 +57,7 @@ func NewWithProxy(uri, proxyURL string) (*scm.Client, error) {
 	client.Reviews = &reviewService{client}
 	client.Users = &userService{client}
 	client.Webhooks = &webhookService{client}
-	
+
 	client.Client.Client = &http.Client{Transport: http.DefaultTransport}
 
 	if proxyURL != "" {
@@ -82,8 +82,8 @@ func NewDefault() *scm.Client {
 // default api.github.com address with optional proxy support.
 // If proxyURL is empty or nil, no proxy will be used.
 // If proxyURL is provided, all HTTP requests will be routed through the specified proxy.
-func NewDefaultWithProxy(proxyURL string) *scm.Client {
-	client, _ := NewWithProxy("https://api.github.com", proxyURL)
+func NewDefaultWithOptionalProxy(proxyURL string) *scm.Client {
+	client, _ := NewWithOptionalProxy("https://api.github.com", proxyURL)
 	return client
 }
 
