@@ -57,11 +57,8 @@ func NewWithProxy(uri, proxyURL string) (*scm.Client, error) {
 	client.Reviews = &reviewService{client}
 	client.Users = &userService{client}
 	client.Webhooks = &webhookService{client}
-<<<<<<< Updated upstream
-	
+
 	client.Client.Client = &http.Client{Transport: http.DefaultTransport}
-=======
->>>>>>> Stashed changes
 
 	if proxyURL != "" {
 		transport, err := proxy.NewTransport(http.DefaultTransport, proxyURL)
