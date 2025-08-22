@@ -92,11 +92,7 @@ func (s *repositoryService) Find(ctx context.Context, repo string) (*scm.Reposit
 	path := fmt.Sprintf("2.0/repositories/%s", repo)
 	out := new(repository)
 	res, err := s.client.do(ctx, "GET", path, nil, out)
-	if err != nil {
-		return nil, res, err
-	}
-	repoPerm, _, err := s.FindPerms(ctx, repo)
-	return convertRepository2(out, repoPerm), res, err
+	return convertRepository(out), res, err
 }
 
 // FindHook returns a repository hook.
