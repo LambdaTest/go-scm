@@ -66,9 +66,7 @@ func NewTransport(base http.RoundTripper, proxyURL string) (http.RoundTripper, e
 	if err != nil {
 		return nil, err
 	}
-
-	return &Transport{
-		Base:     base,
-		ProxyURL: parsedURL,
+	return &http.Transport{
+		Proxy: http.ProxyURL(parsedURL),
 	}, nil
 }

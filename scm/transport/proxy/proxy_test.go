@@ -37,15 +37,28 @@ func TestNewTransport_ValidProxyURL(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Expected no error for valid proxy URL, got: %v", err)
 	}
-	
-	proxyTransport, ok := transport.(*Transport)
+
+	proxyTransport, ok := transport.(*http.Transport)
 	if !ok {
-		t.Fatal("Expected transport to be of type *Transport")
+		t.Fatal("Expected transport to be of type *http.Transport")
 	}
-	
+
+	// Test that the proxy function is set correctly
+	if proxyTransport.Proxy == nil {
+		t.Fatal("Expected proxy function to be set")
+	}
+
+	// Test the proxy function with a sample request
+	testURL, _ := url.Parse("http://example.com")
+	req := &http.Request{URL: testURL}
+	proxyURLResult, err := proxyTransport.Proxy(req)
+	if err != nil {
+		t.Fatalf("Expected no error from proxy function, got: %v", err)
+	}
+
 	expectedURL, _ := url.Parse(proxyURL)
-	if proxyTransport.ProxyURL.String() != expectedURL.String() {
-		t.Errorf("Expected proxy URL %s, got %s", expectedURL.String(), proxyTransport.ProxyURL.String())
+	if proxyURLResult.String() != expectedURL.String() {
+		t.Errorf("Expected proxy URL %s, got %s", expectedURL.String(), proxyURLResult.String())
 	}
 }
 

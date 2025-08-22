@@ -2,11 +2,7 @@
     "ID": "{7dd600e6-0d9c-4801-b967-cb4cc17359ff}",
     "Namespace": "atlassian",
     "Name": "stash-example-plugin",
-    "Perm": {
-        "Pull": true,
-        "Push": true,
-        "Admin": true
-    },
+
     "Branch": "master",
     "Private": true,
     "Clone": "https://bitbucket.org/atlassian/stash-example-plugin.git",
