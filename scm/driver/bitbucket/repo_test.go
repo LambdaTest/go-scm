@@ -25,12 +25,7 @@ func TestRepositoryFind(t *testing.T) {
 		Type("application/json").
 		File("testdata/repo.json")
 
-	gock.New("https://api.bitbucket.org").
-		Get("/2.0/user/permissions/repositories").
-		MatchParam("q", `repository.full_name="atlassian/stash-example-plugin"`).
-		Reply(200).
-		Type("application/json").
-		File("testdata/perms.json")
+
 
 	client, _ := New("https://api.bitbucket.org")
 	got, _, err := client.Repositories.Find(context.Background(), "atlassian/stash-example-plugin")
